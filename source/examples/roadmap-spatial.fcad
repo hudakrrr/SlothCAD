@@ -1,0 +1,58 @@
+{
+  "format": "slothcad",
+  "version": 9,
+  "units": "mm",
+  "features": [
+    {
+      "id": "cab78c72262c4d0b98ec3d3b7644d2e2",
+      "kind": "sketch3d",
+      "name": "Sketch3D",
+      "enabled": true,
+      "entities": [
+        {
+          "id": "7fd40d6ae4e74f5d8476cf1efe2c1f42",
+          "kind": "spline",
+          "points": [
+            [
+              0,
+              0,
+              0
+            ],
+            [
+              10,
+              5,
+              6
+            ],
+            [
+              20,
+              -4,
+              15
+            ],
+            [
+              32,
+              10,
+              22
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "2f5c7a36ed52476fbb2f39a2fca99735",
+      "kind": "pipe",
+      "name": "Pipe",
+      "enabled": true,
+      "path": {
+        "sketch": "cab78c72262c4d0b98ec3d3b7644d2e2",
+        "entities": [
+          "7fd40d6ae4e74f5d8476cf1efe2c1f42"
+        ]
+      },
+      "diameter": 3,
+      "hollow": true,
+      "thickness": 0.5,
+      "operation": "new"
+    }
+  ],
+  "display": {}
+}

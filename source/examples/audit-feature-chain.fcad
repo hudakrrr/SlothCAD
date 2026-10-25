@@ -1,0 +1,332 @@
+{
+  "format": "slothcad",
+  "version": 7,
+  "units": "mm",
+  "features": [
+    {
+      "kind": "sketch",
+      "id": "1ab62d43e48d4a61a25f2eb886d666d3",
+      "name": "Sketch",
+      "enabled": true,
+      "frame": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "u": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "support": null,
+      "entities": [
+        {
+          "id": "68e5b77895c540128c512e6623220213",
+          "kind": "rectangle",
+          "center": [
+            0,
+            0
+          ],
+          "width": 40,
+          "height": 30
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "kind": "extrude",
+      "id": "f365fc44068e448a919d20935210841c",
+      "name": "extrude",
+      "enabled": true,
+      "source": {
+        "type": "sketch",
+        "sketch": "1ab62d43e48d4a61a25f2eb886d666d3",
+        "entities": [
+          "68e5b77895c540128c512e6623220213"
+        ],
+        "holes": [],
+        "profile_mode": "nested"
+      },
+      "depth": 12,
+      "operation": "add"
+    },
+    {
+      "kind": "hole",
+      "id": "472ff9d7840b453e84befccbd34b9a0a",
+      "name": "hole",
+      "enabled": true,
+      "plane": {
+        "type": "face",
+        "face": {
+          "center": [
+            -6.93889390390723e-17,
+            -8.881784197001254e-16,
+            12.0
+          ],
+          "geometry": "PLANE",
+          "area": 1199.9999999999998,
+          "normal": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "edges": 4,
+          "anchor": {
+            "body": {
+              "center": [
+                1.1564823173178714e-17,
+                -1.2443749734340296e-16,
+                5.999999999999999
+              ],
+              "size": [
+                40.0,
+                30.0,
+                12.0
+              ],
+              "volume": 14400.0,
+              "faces": 6,
+              "edges": 12,
+              "index": 0,
+              "count": 1
+            },
+            "center": [
+              0.5,
+              0.49999999999999994,
+              1.0
+            ],
+            "low": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "high": [
+              1.0,
+              1.0,
+              1.0
+            ]
+          }
+        }
+      },
+      "hole_type": "counterbore",
+      "diameter": 4,
+      "depth": 12,
+      "head_diameter": 8,
+      "head_depth": 3,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "kind": "fillet",
+      "id": "25d1217b75e54d7d8b72a4f3bc995fd7",
+      "name": "fillet",
+      "enabled": true,
+      "edge_refs": [
+        {
+          "center": [
+            20.0,
+            -15.0,
+            6.0
+          ],
+          "geometry": "LINE",
+          "length": 12.0,
+          "endpoints": [
+            [
+              20.0,
+              -15.0,
+              0.0
+            ],
+            [
+              20.0,
+              -15.0,
+              12.0
+            ]
+          ],
+          "direction": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "anchor": {
+            "body": {
+              "center": [
+                -1.0389020812519043e-15,
+                -2.4828863955879693e-16,
+                5.963997298685691
+              ],
+              "size": [
+                40.0,
+                30.0,
+                12.0
+              ],
+              "volume": 14136.106217098457,
+              "faces": 9,
+              "edges": 18,
+              "index": 0,
+              "count": 1
+            },
+            "center": [
+              1.0,
+              0.0,
+              0.5
+            ],
+            "low": [
+              1.0,
+              0.0,
+              0.0
+            ],
+            "high": [
+              1.0,
+              0.0,
+              1.0
+            ],
+            "endpoints": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                1.0,
+                0.0,
+                1.0
+              ]
+            ]
+          }
+        }
+      ],
+      "radius": 1
+    },
+    {
+      "kind": "body_move",
+      "id": "651f4b57f66543bcbce7db3976fa76ff",
+      "name": "body_move",
+      "enabled": true,
+      "targets": [
+        {
+          "center": [
+            -0.0036034320626028116,
+            0.0026923992711040856,
+            5.963990738757396
+          ],
+          "size": [
+            40.0,
+            30.0,
+            12.0
+          ],
+          "volume": 14133.530995059225,
+          "faces": 10,
+          "edges": 21,
+          "index": 0,
+          "count": 1
+        }
+      ],
+      "dx": 0,
+      "dy": 40,
+      "dz": 0,
+      "angle": 0,
+      "copy": true
+    },
+    {
+      "kind": "body_rectangular",
+      "id": "379e786ea5804c3f99e80d90adb0e8f3",
+      "name": "body_rectangular",
+      "enabled": true,
+      "targets": [
+        {
+          "center": [
+            -0.0036034320626028168,
+            40.002692399271105,
+            5.963990738757395
+          ],
+          "size": [
+            40.0,
+            30.0,
+            12.0
+          ],
+          "volume": 14133.530995059225,
+          "faces": 10,
+          "edges": 21,
+          "index": 1,
+          "count": 2
+        }
+      ],
+      "columns": 3,
+      "rows": 1,
+      "spacing_x": 50,
+      "spacing_y": 0,
+      "plane": {
+        "type": "origin",
+        "plane": "XY"
+      }
+    },
+    {
+      "kind": "body_split",
+      "id": "b351ed33aeaf4d98bb459ad9e76ce0a3",
+      "name": "body_split",
+      "enabled": true,
+      "targets": [
+        {
+          "center": [
+            -0.0036034320626028116,
+            0.0026923992711040856,
+            5.963990738757396
+          ],
+          "size": [
+            40.0,
+            30.0,
+            12.0
+          ],
+          "volume": 14133.530995059225,
+          "faces": 10,
+          "edges": 21,
+          "index": 0,
+          "count": 4
+        }
+      ],
+      "plane": {
+        "type": "frame",
+        "frame": {
+          "origin": [
+            0,
+            0,
+            6
+          ],
+          "u": [
+            1,
+            0,
+            0
+          ],
+          "normal": [
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      "keep": "both"
+    }
+  ],
+  "display": {
+    "materials": {
+      "0": {
+        "color": "#4ea6c4",
+        "finish": "matte"
+      },
+      "1": {
+        "color": "#c9aa70",
+        "finish": "metallic"
+      }
+    },
+    "bodies": {},
+    "sketches": {
+      "1ab62d43e48d4a61a25f2eb886d666d3": false
+    }
+  }
+}

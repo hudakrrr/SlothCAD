@@ -1,0 +1,234 @@
+{
+  "format": "slothcad",
+  "version": 9,
+  "units": "mm",
+  "features": [
+    {
+      "id": "00e534d1a49243b4af09b324f11dc43c",
+      "kind": "component",
+      "name": "Bracket",
+      "enabled": true,
+      "features": [
+        {
+          "kind": "sketch",
+          "id": "3bb20c2476924b0e9c800f718f0e4154",
+          "name": "Base",
+          "enabled": true,
+          "frame": {
+            "origin": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "u": [
+              1.0,
+              0.0,
+              0.0
+            ],
+            "normal": [
+              0.0,
+              0.0,
+              1.0
+            ]
+          },
+          "support": null,
+          "entities": [
+            {
+              "id": "6dc9c0e3f8f046338243533c81a631e6",
+              "kind": "rectangle",
+              "center": [
+                0,
+                0
+              ],
+              "width": 60,
+              "height": 30
+            }
+          ],
+          "constraints": []
+        },
+        {
+          "id": "8766cc787d9c40a997c2dc4e116a7e22",
+          "kind": "extrude",
+          "name": "Extrude",
+          "enabled": true,
+          "source": {
+            "type": "sketch",
+            "sketch": "3bb20c2476924b0e9c800f718f0e4154",
+            "entities": [
+              "6dc9c0e3f8f046338243533c81a631e6"
+            ],
+            "profile_mode": "nested",
+            "region_key": [
+              "6dc9c0e3f8f046338243533c81a631e6"
+            ]
+          },
+          "depth": 8,
+          "operation": "add"
+        },
+        {
+          "kind": "sketch",
+          "id": "6a98d9bf499c46058a8786296cf3856a",
+          "name": "Hole profile",
+          "enabled": true,
+          "frame": {
+            "origin": [
+              0.0,
+              0.0,
+              8
+            ],
+            "u": [
+              1.0,
+              0.0,
+              0.0
+            ],
+            "normal": [
+              0.0,
+              0.0,
+              1.0
+            ]
+          },
+          "support": null,
+          "entities": [
+            {
+              "id": "3c9e547074654d5ebde734d8c892dcd3",
+              "kind": "circle",
+              "center": [
+                -20,
+                0
+              ],
+              "radius": 3
+            }
+          ],
+          "constraints": []
+        },
+        {
+          "id": "3f8e4e349e76404ab358cb02626c201d",
+          "kind": "extrude",
+          "name": "Extrude",
+          "enabled": true,
+          "source": {
+            "type": "sketch",
+            "sketch": "6a98d9bf499c46058a8786296cf3856a",
+            "entities": [
+              "3c9e547074654d5ebde734d8c892dcd3"
+            ],
+            "profile_mode": "nested",
+            "region_key": [
+              "3c9e547074654d5ebde734d8c892dcd3"
+            ]
+          },
+          "depth": -8,
+          "operation": "cut"
+        },
+        {
+          "id": "0814a40638a840fd9001187dde139d2c",
+          "kind": "feature_rectangular",
+          "name": "Feature Rectangular",
+          "enabled": true,
+          "features": [
+            "3f8e4e349e76404ab358cb02626c201d"
+          ],
+          "targets": [
+            {
+              "center": [
+                0.3191728202963232,
+                -2.6135696208658273e-16,
+                4.0
+              ],
+              "size": [
+                60.0,
+                30.0,
+                8.0
+              ],
+              "volume": 14173.805328941535,
+              "faces": 7,
+              "edges": 15,
+              "body_id": "8766cc787d9c40a997c2dc4e116a7e22:body:0",
+              "orientation": "",
+              "producer": "3f8e4e349e76404ab358cb02626c201d",
+              "index": 0,
+              "count": 1
+            }
+          ],
+          "columns": 5,
+          "rows": 1,
+          "spacing_x": 10,
+          "spacing_y": 10,
+          "object_type": "features",
+          "plane": {
+            "type": "origin",
+            "plane": "XY"
+          }
+        }
+      ],
+      "pose": {
+        "origin": [
+          -45,
+          0,
+          0
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "angle": 0
+      },
+      "grounded": true
+    },
+    {
+      "id": "784e1a7cd66048c3b40f799c65b29a8a",
+      "kind": "component",
+      "name": "Pin",
+      "enabled": true,
+      "features": [
+        {
+          "id": "c48768d8b0fc43a89836fdef3edccaa9",
+          "kind": "primitive",
+          "name": "Primitive",
+          "enabled": true,
+          "shape": "cylinder",
+          "radius": 5,
+          "height": 30,
+          "operation": "new"
+        }
+      ],
+      "pose": {
+        "origin": [
+          15,
+          0,
+          0
+        ],
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "angle": 0
+      }
+    },
+    {
+      "id": "42c037affb744a3fa8e85280e18b1057",
+      "kind": "joint",
+      "name": "Joint",
+      "enabled": true,
+      "moving": "784e1a7cd66048c3b40f799c65b29a8a",
+      "fixed": null,
+      "joint_type": "revolute",
+      "value": 25,
+      "minimum": -90,
+      "maximum": 90,
+      "direction": [
+        0,
+        1,
+        0
+      ],
+      "anchor": [
+        15,
+        0,
+        0
+      ]
+    }
+  ],
+  "display": {}
+}

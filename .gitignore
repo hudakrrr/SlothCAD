@@ -1,0 +1,27 @@
+# Python environment and caches
+.venv/
+__pycache__/
+*.pyc
+.validation/
+
+# Local build output (the Windows installer ships its own copy in source/.native/)
+*.tmp.dll
+*.tmp.so
+
+# Editor and OS files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Autosave / recovery files and logs
+*.log
+last-start-error.txt
+
+
+# Backup copies that SlothCAD keeps next to a project when it is saved
+*.fcad.bak
+
+# Portable build output (source/tools/build_portable.py) and release zips
+dist/
+*.zip

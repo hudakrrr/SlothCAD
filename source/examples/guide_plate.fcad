@@ -1,0 +1,122 @@
+{
+  "format": "slothcad",
+  "version": 3,
+  "units": "mm",
+  "features": [
+    {
+      "kind": "sketch",
+      "id": "b757f01cdc0148f1a72e6f14aec256fe",
+      "name": "Guide plate",
+      "enabled": true,
+      "frame": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "u": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "support": null,
+      "entities": [
+        {
+          "id": "bf894ec787ed4647b242ab528d651f18",
+          "kind": "rectangle",
+          "center": [
+            0,
+            0
+          ],
+          "width": 40,
+          "height": 30
+        },
+        {
+          "id": "deadc83d04c940bda4160db3cbd63663",
+          "kind": "circle",
+          "center": [
+            0,
+            0
+          ],
+          "radius": 12,
+          "construction": true
+        },
+        {
+          "id": "110fc1bcfd5449c4826d695ae228284f",
+          "kind": "line",
+          "a": [
+            -24,
+            0
+          ],
+          "b": [
+            24,
+            0
+          ],
+          "construction": true
+        },
+        {
+          "id": "1e4310289a734011b228e8d9ef34be85",
+          "kind": "circle",
+          "center": [
+            12.0,
+            0.0
+          ],
+          "radius": 2
+        },
+        {
+          "id": "935b734b3e964d31b482f68c44aa4b94",
+          "kind": "circle",
+          "center": [
+            7.347880794884119e-16,
+            12.0
+          ],
+          "radius": 2
+        },
+        {
+          "id": "46c67b2d10774bf0af5692f7fcc379e4",
+          "kind": "circle",
+          "center": [
+            -12.0,
+            1.4695761589768238e-15
+          ],
+          "radius": 2
+        },
+        {
+          "id": "ef115ff794a94f6cb8ce7a2806280dee",
+          "kind": "circle",
+          "center": [
+            -2.204364238465236e-15,
+            -12.0
+          ],
+          "radius": 2
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "plate",
+      "name": "Symmetric plate",
+      "enabled": true,
+      "depth": 6.0,
+      "direction": "symmetric",
+      "offset": 2.0,
+      "operation": "add",
+      "signed_depth": true,
+      "source": {
+        "type": "sketch",
+        "sketch": "b757f01cdc0148f1a72e6f14aec256fe",
+        "entities": [
+          "bf894ec787ed4647b242ab528d651f18"
+        ],
+        "profile_mode": "nested"
+      }
+    }
+  ],
+  "display": {}
+}

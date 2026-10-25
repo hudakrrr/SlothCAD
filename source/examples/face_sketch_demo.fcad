@@ -1,0 +1,120 @@
+{
+  "format": "slothcad",
+  "version": 2,
+  "units": "mm",
+  "features": [
+    {
+      "kind": "sketch",
+      "id": "785162b5114742edaa5dc09b2f228d12",
+      "name": "Sketch XY",
+      "enabled": true,
+      "frame": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "u": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "support": null,
+      "entities": [
+        {
+          "id": "823be2e1e8614e7eb7bfff2a91c4fe37",
+          "kind": "rectangle",
+          "center": [
+            0,
+            0
+          ],
+          "width": 40.5,
+          "height": 30.5
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "f7f2ba7616b34742b96e595d5d5afdc4",
+      "name": "Extrude sketch",
+      "enabled": true,
+      "depth": 10.0,
+      "operation": "add",
+      "source": {
+        "type": "sketch",
+        "sketch": "785162b5114742edaa5dc09b2f228d12",
+        "entities": [
+          "823be2e1e8614e7eb7bfff2a91c4fe37"
+        ]
+      }
+    },
+    {
+      "kind": "sketch",
+      "id": "014e111d4be04b669053d5dd386dc93c",
+      "name": "Sketch on face",
+      "enabled": true,
+      "frame": {
+        "origin": [
+          20.25,
+          -2.2898349882893854e-16,
+          5.0
+        ],
+        "u": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "normal": [
+          1.0,
+          -0.0,
+          -0.0
+        ]
+      },
+      "support": {
+        "center": [
+          20.25,
+          -2.2898349882893854e-16,
+          5.0
+        ],
+        "normal": [
+          1.0,
+          -0.0,
+          -0.0
+        ],
+        "area": 305.0
+      },
+      "entities": [
+        {
+          "id": "1e19042e408444539e56ba6b5138ee05",
+          "kind": "circle",
+          "center": [
+            0,
+            0
+          ],
+          "radius": 3
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "6163bad0df25460aa71ae09e4e784cc9",
+      "name": "Extrude sketch",
+      "enabled": true,
+      "depth": 10.0,
+      "operation": "add",
+      "source": {
+        "type": "sketch",
+        "sketch": "014e111d4be04b669053d5dd386dc93c",
+        "entities": [
+          "1e19042e408444539e56ba6b5138ee05"
+        ]
+      }
+    }
+  ]
+}

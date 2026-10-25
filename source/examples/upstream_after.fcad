@@ -1,0 +1,286 @@
+{
+  "format": "slothcad",
+  "version": 6,
+  "units": "mm",
+  "features": [
+    {
+      "kind": "sketch",
+      "id": "73fbc000ae5145988877b4c3c936e3dc",
+      "name": "Plate sketch",
+      "enabled": true,
+      "frame": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "u": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "support": null,
+      "entities": [
+        {
+          "id": "9a164ec5cce2411e9d2f9b2e54775504",
+          "kind": "rectangle",
+          "center": [
+            0,
+            0
+          ],
+          "width": 30,
+          "height": 20
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "kind": "extrude",
+      "id": "e88c336b283a4caab30e61da55af0012",
+      "name": "Plate extrusion",
+      "enabled": true,
+      "source": {
+        "type": "sketch",
+        "sketch": "73fbc000ae5145988877b4c3c936e3dc",
+        "entities": [
+          "9a164ec5cce2411e9d2f9b2e54775504"
+        ]
+      },
+      "depth": 25,
+      "operation": "add"
+    },
+    {
+      "kind": "sketch",
+      "id": "3af14875cc754b10beb0a6e09bc769d0",
+      "name": "Spacer sketch",
+      "enabled": true,
+      "frame": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "u": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "support": null,
+      "entities": [
+        {
+          "id": "2bcf15096f7144dcb9d0c3a31f1c1b60",
+          "kind": "rectangle",
+          "center": [
+            50,
+            0
+          ],
+          "width": 12,
+          "height": 10
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "kind": "extrude",
+      "id": "4880adc1ca004811a4ad8b86b1d96128",
+      "name": "Unchanged spacer",
+      "enabled": true,
+      "source": {
+        "type": "sketch",
+        "sketch": "3af14875cc754b10beb0a6e09bc769d0",
+        "entities": [
+          "2bcf15096f7144dcb9d0c3a31f1c1b60"
+        ]
+      },
+      "depth": 20,
+      "operation": "add"
+    },
+    {
+      "kind": "hole",
+      "id": "a018649270c2420cb209bc3263526b35",
+      "name": "Hole on top face",
+      "enabled": true,
+      "plane": {
+        "type": "face",
+        "face": {
+          "center": [
+            -3.469446951953615e-17,
+            1.332267629550188e-16,
+            20.0
+          ],
+          "geometry": "PLANE",
+          "area": 399.99999999999994,
+          "normal": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "edges": 4,
+          "anchor": {
+            "body": {
+              "center": [
+                1.2490009027033014e-17,
+                2.0539125955565402e-17,
+                10.0
+              ],
+              "size": [
+                20.0,
+                20.0,
+                20.0
+              ],
+              "volume": 7999.999999999998,
+              "faces": 6,
+              "edges": 12,
+              "index": 0,
+              "count": 2
+            },
+            "center": [
+              0.5,
+              0.5,
+              1.0
+            ],
+            "low": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "high": [
+              1.0,
+              1.0,
+              1.0
+            ]
+          }
+        }
+      },
+      "diameter": 4,
+      "depth": 6,
+      "x": 0,
+      "y": 0,
+      "hole_type": "simple"
+    },
+    {
+      "kind": "fillet",
+      "name": "Corner fillet",
+      "enabled": true,
+      "radius": 1,
+      "edges": "vertical",
+      "edge_refs": [
+        {
+          "center": [
+            10.0,
+            -10.0,
+            10.0
+          ],
+          "geometry": "LINE",
+          "length": 20.0,
+          "endpoints": [
+            [
+              10.0,
+              -10.0,
+              0.0
+            ],
+            [
+              10.0,
+              -10.0,
+              20.0
+            ]
+          ],
+          "direction": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "anchor": {
+            "body": {
+              "center": [
+                6.374471430404407e-17,
+                -9.23284350451609e-19,
+                9.933398853254603
+              ],
+              "size": [
+                20.0,
+                20.0,
+                20.0
+              ],
+              "volume": 7924.601776313845,
+              "faces": 8,
+              "edges": 15,
+              "index": 0,
+              "count": 2
+            },
+            "center": [
+              1.0,
+              0.0,
+              0.5
+            ],
+            "low": [
+              1.0,
+              0.0,
+              0.0
+            ],
+            "high": [
+              1.0,
+              0.0,
+              1.0
+            ],
+            "endpoints": [
+              [
+                1.0,
+                0.0,
+                0.0
+              ],
+              [
+                1.0,
+                0.0,
+                1.0
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "body_move",
+      "id": "be3b8ce3791540c6a4b965be4dd914b0",
+      "name": "Move plate only",
+      "enabled": true,
+      "targets": [
+        {
+          "center": [
+            -0.005297982692784133,
+            0.0052979826927840555,
+            9.933362761917573
+          ],
+          "size": [
+            20.0,
+            20.0,
+            20.0
+          ],
+          "volume": 7920.309739581792,
+          "faces": 9,
+          "edges": 18,
+          "index": 0,
+          "count": 2
+        }
+      ],
+      "dx": 0,
+      "dy": 5,
+      "dz": 0,
+      "angle": 0,
+      "copy": false
+    }
+  ],
+  "display": {}
+}

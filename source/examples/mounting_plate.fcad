@@ -1,0 +1,159 @@
+{
+  "format": "slothcad",
+  "version": 1,
+  "units": "mm",
+  "features": [
+    {
+      "kind": "extrude",
+      "name": "Plate",
+      "enabled": true,
+      "profile": "rectangle",
+      "plane": "XY",
+      "operation": "add",
+      "x": 0.0,
+      "y": 0.0,
+      "z": 0.0,
+      "width": 70,
+      "height": 40,
+      "radius": 10.0,
+      "depth": 8,
+      "points": [
+        [
+          -20.0,
+          -15.0
+        ],
+        [
+          20.0,
+          -15.0
+        ],
+        [
+          0.0,
+          15.0
+        ]
+      ]
+    },
+    {
+      "kind": "extrude",
+      "name": "Mount hole -25, -12",
+      "enabled": true,
+      "profile": "circle",
+      "plane": "XY",
+      "operation": "cut",
+      "x": -25,
+      "y": -12,
+      "z": -1,
+      "width": 40.0,
+      "height": 30.0,
+      "radius": 3,
+      "depth": 10,
+      "points": [
+        [
+          -20.0,
+          -15.0
+        ],
+        [
+          20.0,
+          -15.0
+        ],
+        [
+          0.0,
+          15.0
+        ]
+      ]
+    },
+    {
+      "kind": "extrude",
+      "name": "Mount hole -25, 12",
+      "enabled": true,
+      "profile": "circle",
+      "plane": "XY",
+      "operation": "cut",
+      "x": -25,
+      "y": 12,
+      "z": -1,
+      "width": 40.0,
+      "height": 30.0,
+      "radius": 3,
+      "depth": 10,
+      "points": [
+        [
+          -20.0,
+          -15.0
+        ],
+        [
+          20.0,
+          -15.0
+        ],
+        [
+          0.0,
+          15.0
+        ]
+      ]
+    },
+    {
+      "kind": "extrude",
+      "name": "Mount hole 25, -12",
+      "enabled": true,
+      "profile": "circle",
+      "plane": "XY",
+      "operation": "cut",
+      "x": 25,
+      "y": -12,
+      "z": -1,
+      "width": 40.0,
+      "height": 30.0,
+      "radius": 3,
+      "depth": 10,
+      "points": [
+        [
+          -20.0,
+          -15.0
+        ],
+        [
+          20.0,
+          -15.0
+        ],
+        [
+          0.0,
+          15.0
+        ]
+      ]
+    },
+    {
+      "kind": "extrude",
+      "name": "Mount hole 25, 12",
+      "enabled": true,
+      "profile": "circle",
+      "plane": "XY",
+      "operation": "cut",
+      "x": 25,
+      "y": 12,
+      "z": -1,
+      "width": 40.0,
+      "height": 30.0,
+      "radius": 3,
+      "depth": 10,
+      "points": [
+        [
+          -20.0,
+          -15.0
+        ],
+        [
+          20.0,
+          -15.0
+        ],
+        [
+          0.0,
+          15.0
+        ]
+      ]
+    },
+    {
+      "kind": "fillet",
+      "name": "Round outer corners",
+      "enabled": true,
+      "radius": 3,
+      "edges": "vertical"
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+{
+  "format": "slothcad",
+  "version": 2,
+  "units": "mm",
+  "features": [
+    {
+      "kind": "sketch",
+      "id": "fffac282f51c4b7bb5d62907cb9799e0",
+      "name": "Disk and nine holes",
+      "enabled": true,
+      "frame": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "u": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "support": null,
+      "entities": [
+        {
+          "id": "e06dae65dee0487aa157e4861c47d3bc",
+          "kind": "circle",
+          "center": [
+            0,
+            0
+          ],
+          "radius": 20
+        },
+        {
+          "id": "89c9dccdf61944f08f7183053766ce99",
+          "kind": "circle",
+          "center": [
+            14.0,
+            0.0
+          ],
+          "radius": 2
+        },
+        {
+          "id": "7c733237c9934a3fb78c193b7a5d2b92",
+          "kind": "circle",
+          "center": [
+            10.724622203665692,
+            8.999026535611549
+          ],
+          "radius": 2
+        },
+        {
+          "id": "9a66aadac6a54c18bc8d1e793d49bba4",
+          "kind": "circle",
+          "center": [
+            2.4310744873370256,
+            13.787308542170912
+          ],
+          "radius": 2
+        },
+        {
+          "id": "086baade18af4c859a2fa2f2fc9b8d8f",
+          "kind": "circle",
+          "center": [
+            -6.9999999999999964,
+            12.124355652982143
+          ],
+          "radius": 2
+        },
+        {
+          "id": "ca0b6c3d5e4b4d09a6e0f22dd546442e",
+          "kind": "circle",
+          "center": [
+            -13.155696691002717,
+            4.788282006559364
+          ],
+          "radius": 2
+        },
+        {
+          "id": "925fd97f3710413c9845667fbc184891",
+          "kind": "circle",
+          "center": [
+            -13.155696691002717,
+            -4.788282006559362
+          ],
+          "radius": 2
+        },
+        {
+          "id": "23ec4fa441024087b797f193f019dd0c",
+          "kind": "circle",
+          "center": [
+            -7.000000000000006,
+            -12.124355652982137
+          ],
+          "radius": 2
+        },
+        {
+          "id": "6c9746cae1014e11b02d4e4993ba5142",
+          "kind": "circle",
+          "center": [
+            2.4310744873370194,
+            -13.787308542170914
+          ],
+          "radius": 2
+        },
+        {
+          "id": "100234b5cada48ceb681607ac5d446d6",
+          "kind": "circle",
+          "center": [
+            10.724622203665689,
+            -8.999026535611554
+          ],
+          "radius": 2
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "1a206630c3ed4616a8d92ef1388631be",
+      "name": "Disk with nine through holes",
+      "enabled": true,
+      "depth": 5,
+      "operation": "add",
+      "signed_depth": true,
+      "source": {
+        "type": "sketch",
+        "sketch": "fffac282f51c4b7bb5d62907cb9799e0",
+        "entities": [
+          "e06dae65dee0487aa157e4861c47d3bc"
+        ],
+        "holes": [
+          [
+            "89c9dccdf61944f08f7183053766ce99"
+          ],
+          [
+            "7c733237c9934a3fb78c193b7a5d2b92"
+          ],
+          [
+            "9a66aadac6a54c18bc8d1e793d49bba4"
+          ],
+          [
+            "086baade18af4c859a2fa2f2fc9b8d8f"
+          ],
+          [
+            "ca0b6c3d5e4b4d09a6e0f22dd546442e"
+          ],
+          [
+            "925fd97f3710413c9845667fbc184891"
+          ],
+          [
+            "23ec4fa441024087b797f193f019dd0c"
+          ],
+          [
+            "6c9746cae1014e11b02d4e4993ba5142"
+          ],
+          [
+            "100234b5cada48ceb681607ac5d446d6"
+          ]
+        ],
+        "profile_mode": "nested"
+      }
+    }
+  ],
+  "display": {}
+}

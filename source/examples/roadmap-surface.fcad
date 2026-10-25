@@ -1,0 +1,65 @@
+{
+  "format": "slothcad",
+  "version": 9,
+  "units": "mm",
+  "features": [
+    {
+      "kind": "sketch",
+      "id": "7f5cac33b1734c25a2138d194f73560f",
+      "name": "Surface boundary",
+      "enabled": true,
+      "frame": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "u": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal": [
+          0.0,
+          -1.0,
+          0.0
+        ]
+      },
+      "support": null,
+      "entities": [
+        {
+          "id": "c723149af9444fc391108964b066560b",
+          "kind": "line",
+          "a": [
+            8,
+            0
+          ],
+          "b": [
+            8,
+            20
+          ]
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "id": "7804553c9c304b69aee886b17ea12e1c",
+      "kind": "surface_revolve",
+      "name": "Surface Revolve",
+      "enabled": true,
+      "source": {
+        "type": "path",
+        "sketch": "7f5cac33b1734c25a2138d194f73560f",
+        "entities": [
+          "c723149af9444fc391108964b066560b"
+        ]
+      },
+      "axis": {
+        "type": "origin",
+        "axis": "Z"
+      },
+      "angle": 240
+    }
+  ],
+  "display": {}
+}

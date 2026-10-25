@@ -1,0 +1,106 @@
+{
+  "format": "slothcad",
+  "version": 10,
+  "units": "mm",
+  "parameters": {
+    "thickness": 6,
+    "screw": 6
+  },
+  "features": [
+    {
+      "kind": "sketch",
+      "id": "6af7c0c3ea954829b6e98564a4bdd9b3",
+      "name": "Plate outline",
+      "enabled": true,
+      "frame": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "u": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "support": null,
+      "entities": [
+        {
+          "id": "755b8ca5d0b04ec799aeb31391c1f824",
+          "kind": "rectangle",
+          "center": [
+            0,
+            0
+          ],
+          "width": 60,
+          "height": 40
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "kind": "extrude",
+      "id": "plate-body",
+      "name": "Plate",
+      "enabled": true,
+      "sources": [
+        {
+          "type": "sketch",
+          "sketch": "6af7c0c3ea954829b6e98564a4bdd9b3",
+          "entities": [
+            "755b8ca5d0b04ec799aeb31391c1f824"
+          ],
+          "holes": [],
+          "profile_mode": "nested",
+          "region_key": [
+            "755b8ca5d0b04ec799aeb31391c1f824"
+          ]
+        }
+      ],
+      "depth": 6.0,
+      "operation": "add",
+      "signed_depth": false,
+      "expressions": {
+        "depth": "thickness"
+      },
+      "expression_values": {
+        "depth": 6.0
+      }
+    },
+    {
+      "kind": "hole",
+      "id": "plate-hole",
+      "name": "Mounting hole",
+      "enabled": true,
+      "operation": "cut",
+      "plane": {
+        "type": "origin",
+        "plane": "XY"
+      },
+      "x": 0.0,
+      "y": 0.0,
+      "depth": 20.0,
+      "diameter": 6.6,
+      "hole_type": "simple",
+      "head_diameter": 11.0,
+      "head_depth": 6.5,
+      "head_angle": 90.0,
+      "through_all": true,
+      "direction": "outward",
+      "expressions": {
+        "diameter": "screw + 0.6"
+      },
+      "standard": "",
+      "expression_values": {
+        "diameter": 6.6
+      }
+    }
+  ],
+  "display": {}
+}

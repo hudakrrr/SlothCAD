@@ -1,0 +1,9 @@
+# Local environment and build output
+.venv/
+.native/*.so
+.native/*.tmp*
+.validation/
+__pycache__/
+*.pyc
+# Temporary folders left by test runs
+tmp*/

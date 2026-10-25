@@ -1,0 +1,115 @@
+{
+  "format": "slothcad",
+  "version": 7,
+  "units": "mm",
+  "features": [
+    {
+      "kind": "sketch",
+      "id": "d6aacedcb6534306844b515544ea196a",
+      "name": "Exact curves",
+      "enabled": true,
+      "frame": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "u": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "normal": [
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "support": null,
+      "entities": [
+        {
+          "id": "d301c88eb99b4f4a9d6707a7d6676d4c",
+          "kind": "ellipse",
+          "center": [
+            0,
+            0
+          ],
+          "major": [
+            15,
+            0
+          ],
+          "minor_radius": 8
+        },
+        {
+          "id": "d7008dbf6da04fd8bfe1c49e9fa76c93",
+          "kind": "circle",
+          "center": [
+            0,
+            0
+          ],
+          "radius": 3
+        },
+        {
+          "id": "d431cf2feb914fef9dace2e3001d2da5",
+          "kind": "spline",
+          "basis": "bspline",
+          "points": [
+            [
+              25,
+              0
+            ],
+            [
+              35,
+              12
+            ],
+            [
+              45,
+              0
+            ]
+          ],
+          "degree": 2
+        },
+        {
+          "id": "f3b0fb6dee1f42b5ae7c5fbe84da8d8d",
+          "kind": "conic",
+          "a": [
+            25,
+            -12
+          ],
+          "control": [
+            35,
+            -2
+          ],
+          "b": [
+            45,
+            -12
+          ],
+          "weight": 0.6
+        }
+      ],
+      "constraints": []
+    },
+    {
+      "kind": "extrude",
+      "id": "28b4aa1962054158b438f06e255966b4",
+      "name": "Exact ellipse with hole",
+      "enabled": true,
+      "source": {
+        "type": "sketch",
+        "sketch": "d6aacedcb6534306844b515544ea196a",
+        "entities": [
+          "d301c88eb99b4f4a9d6707a7d6676d4c"
+        ],
+        "holes": [
+          [
+            "d7008dbf6da04fd8bfe1c49e9fa76c93"
+          ]
+        ],
+        "profile_mode": "nested"
+      },
+      "depth": 6,
+      "operation": "add"
+    }
+  ],
+  "display": {}
+}
