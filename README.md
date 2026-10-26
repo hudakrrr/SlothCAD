@@ -62,7 +62,8 @@ To run the tests: `cd source` then `python validation_runner.py`
 
 ## License
 
-[MIT](LICENSE). SlothCAD is free and open-source software. It is built on Qt for
+SlothCAD is free and open-source software under the [GNU General Public License v3.0](LICENSE).
+Changed versions you share must stay open source under the same license. It is built on Qt for
 Python (LGPL), CadQuery (Apache-2.0) and OpenCASCADE (LGPL), which keep their own licenses.
 The tool icons are based on [Iconoir](https://github.com/iconoir-icons/iconoir) (MIT); see
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

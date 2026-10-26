@@ -1151,7 +1151,7 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
 
     def show_about(self):
         QMessageBox.information(self,tr('About SlothCAD'),
-            f'SlothCAD {VERSION}\n\n'+tr('SlothCAD is free and open-source software, released under the MIT License. You may use, study, change and share it, for any purpose.')
+            f'SlothCAD {VERSION}\n\n'+tr('SlothCAD is free and open-source software, released under the GNU General Public License v3.0. You may use, study, change and share it; versions you share must stay under the same license.')
             +'\n\n'+tr('It is built on Qt for Python (LGPL), CadQuery (Apache-2.0) and OpenCASCADE (LGPL).'))
 
     def show_shortcuts(self):

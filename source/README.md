@@ -32,9 +32,9 @@ The software renderer is used automatically if the native module is unavailable
 
 ## License
 
-SlothCAD is free and open-source software, released under the [MIT License](LICENSE):
-you may use, study, change and share it, for any purpose, including commercial use,
-as long as the copyright notice stays with it.
+SlothCAD is free and open-source software, released under the [GNU General Public License v3.0](LICENSE):
+you may use, study, change and share it. If you share it or a changed version, you must
+share the source code too, under the same license, so it can't be made closed source.
 
 It is built on other open-source projects: Qt for Python (PySide6, LGPL), CadQuery
 (Apache-2.0) and OpenCASCADE (LGPL). They are installed as separate libraries and
