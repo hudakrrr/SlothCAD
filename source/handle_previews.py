@@ -24,12 +24,16 @@ def _arc(center,a,b,count=9):
 
 # --- Fillet / chamfer --------------------------------------------------------
 
-def edge_station(point,tangent,n1,n2,convex):
+def edge_station(point,tangent,n1,n2,convex,normal_at=None,step=None):
     """Where an edge's fillet/chamfer starts on each face, per unit size.
 
     ``v1``/``v2`` run along each face, away from the edge; ``alpha`` is the angle
     of the wedge they span (the material for a convex edge, the open corner for a
     concave one). Returns None when the faces are tangent (nothing to round).
+
+    ``normal_at(index, point)`` (optional) returns face ``index``'s normal near
+    ``point``; it is used to measure how each face curves across the edge so a
+    rounding next to a cylinder is not previewed as if the face were flat.
     """
     t=_unit(tangent);n1=_unit(n1);n2=_unit(n2)
     if t is None or n1 is None or n2 is None:return None
@@ -41,7 +45,78 @@ def edge_station(point,tangent,n1,n2,convex):
     if v2@(other)<0:v2=-v2
     alpha=math.acos(max(-1.,min(1.,float(v1@v2))))
     if alpha<1e-3 or alpha>math.pi-1e-3:return None
-    return dict(point=np.asarray(point,float),v1=v1,v2=v2,alpha=alpha)
+    point=np.asarray(point,float)
+    # w1/w2: unit normals of each face's cross-section pointing to the side the
+    # rounding lies on (toward the other face), independent of face orientation.
+    w1=_unit(v2-(v2@v1)*v1);w2=_unit(v1-(v1@v2)*v2)
+    curvature=[0.,0.]
+    if normal_at is not None and step:
+        for i,(n,v,w) in enumerate(((n1,v1,w1),(n2,v2,w2))):
+            try:
+                moved=_unit(normal_at(i,point+v*step))
+                if moved is None:continue
+                if moved@n<0:moved=-moved
+                # Positive when the face bends toward the rounding (a concave cylinder).
+                k=-float((moved-n)@v)/step*(1. if n@w>=0 else -1.)
+                curvature[i]=k if abs(k)>1e-9 else 0.
+            except Exception:pass
+    return dict(point=point,v1=v1,v2=v2,w1=w1,w2=w2,k1=curvature[0],k2=curvature[1],alpha=alpha)
+
+
+def _on_face(s,i,distance):
+    """Point ``distance`` along face ``i``'s cross-section curve away from the edge."""
+    v,w,k=s[f'v{i}'],s.get(f'w{i}'),s.get(f'k{i}',0.)
+    if not k or w is None:return s['point']+v*distance
+    angle=distance*k
+    return s['point']+v*(math.sin(angle)/k)+w*((1-math.cos(angle))/k)
+
+
+def _contacts(s,value,chamfer):
+    """(contact on face 1, contact on face 2, rounding centre or None) for size ``value``.
+
+    Each face is modelled in the edge's cross-section as a line or a circle with
+    its measured curvature; the rounding is the circle of radius ``value``
+    tangent to both, found by Newton steps from the flat-face answer.
+    """
+    half=s['alpha']/2
+    if chamfer:return _on_face(s,1,value),_on_face(s,2,value),None
+    w=_unit(s['v1']+s['v2'])
+    flat=(s['point']+s['v1']*(value/math.tan(half)),s['point']+s['v2']*(value/math.tan(half)),
+          s['point']+w*(value/math.sin(half)) if w is not None else None)
+    if not (s.get('k1') or s.get('k2')) or flat[2] is None:return flat
+    P=s['point'];faces=[]
+    for i in (1,2):
+        k=s[f'k{i}'];wi=s[f'w{i}']
+        faces.append((k,wi,P+wi/k if k else None))
+    def residual(X):
+        f=[];J=[]
+        for k,wi,O in faces:
+            if not k:f.append(float((X-P)@wi)-value);J.append(wi);continue
+            d=X-O;dist=float(np.linalg.norm(d))
+            if dist<1e-12:return None,None
+            u=d/dist
+            # Signed distance to the face, positive on the rounding side.
+            if k>0:f.append(1/k-dist-value);J.append(-u)
+            else:f.append(dist+1/k-value);J.append(u)
+        return np.asarray(f),np.asarray(J)
+    X=flat[2].copy();basis=np.asarray([s['v1'],s['w1']])
+    for _ in range(30):
+        f,J=residual(X)
+        if f is None:return flat
+        if float(np.max(np.abs(f)))<=1e-9*max(1.,value):break
+        A=J@basis.T
+        try:step=np.linalg.solve(A,-f)
+        except np.linalg.LinAlgError:return flat
+        X=X+basis.T@step
+    else:return flat
+    contacts=[]
+    for k,wi,O in faces:
+        if not k:contacts.append(X-wi*value)
+        else:
+            u=_unit(X-O)
+            if u is None:return flat
+            contacts.append(O+u*abs(1/k))
+    return contacts[0],contacts[1],X
 
 
 def _line_intersection(p0,p1,q0,q1,tolerance):
@@ -78,10 +153,7 @@ def edge_ghost(edges,chamfer=False):
             usable=[s for s in entry['stations'] if s is not None]
             if not usable:continue
             straight=bool(entry.get('straight')) and len(usable)>=2
-            def corner(s):
-                half=s['alpha']/2
-                setback=value if chamfer else value/math.tan(half)
-                return s['point']+s['v1']*setback,s['point']+s['v2']*setback,half
+            def corner(s):return _contacts(s,value,chamfer)
             if straight:
                 first,last=usable[0],usable[-1]
                 mid=dict(first,point=(first['point']+last['point'])/2)
@@ -116,14 +188,9 @@ def edge_ghost(edges,chamfer=False):
         for index,picks,straight in sections:
             for fraction,s in picks:
                 if straight and ((fraction==0 and (index,0) in trimmed) or (fraction==1 and (index,1) in trimmed)):continue
-                half=s['alpha']/2
-                setback=value if chamfer else value/math.tan(half)
-                a=s['point']+s['v1']*setback;b=s['point']+s['v2']*setback
+                a,b,center=_contacts(s,value,chamfer)
                 if chamfer:lines.append(np.asarray([a,b]))
-                else:
-                    w=_unit(s['v1']+s['v2'])
-                    if w is None:continue
-                    lines.append(_arc(s['point']+w*(value/math.sin(half)),a,b))
+                elif center is not None:lines.append(_arc(center,a,b))
         return lines
     return build
 

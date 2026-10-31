@@ -26,6 +26,19 @@ class EdgePreviewTests(unittest.TestCase):
         self.assertIsNone(H.edge_station([0,0,0],[1,0,0],[0,0,1],[0,0,1],True))
 
 
+class CurvedFacePreviewTests(unittest.TestCase):
+    def test_fillet_next_to_concave_cylinder_matches_kernel(self):
+        # Flat face y=0 meets a concave cylinder (centre (50,-20), r=40); the flat-face
+        # formula previewed the rounding ~3.5x too large while dragging.
+        p=np.array([50-math.sqrt(1200),0.,5.]);axis=np.array([50.,-20.,5.])
+        n_flat=np.array([0.,-1.,0.])
+        def n_cyl(q):d=axis-np.asarray(q);d[2]=0;return d/np.linalg.norm(d)
+        s=H.edge_station(p,[0,0,1],n_flat,n_cyl(p),True,lambda i,q:n_flat if i==0 else n_cyl(q),.01)
+        a,b,arc=[np.asarray(x) for x in H.edge_ghost([[s]])(15)]
+        ends=sorted([tuple(np.round(arc[0][:2],2)),tuple(np.round(arc[-1][:2],2))])
+        self.assertEqual(ends,[(7.57,0.),(19.14,5.45)])
+
+
 class OutlinePreviewTests(unittest.TestCase):
     def test_polygon_offset_moves_inward_for_both_windings(self):
         square=np.array([[0,0],[10,0],[10,10],[0,10]],float)

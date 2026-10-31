@@ -22,3 +22,20 @@ class TrimTests(unittest.TestCase):
         result=trim_entities(es,0,[3,4]);self.assertEqual(len(result),2);validate_entity(result[0]);self.assertAlmostEqual(abs(arc_data(result[0])[3]),np.pi/2)
     def test_isolated_edge_deleted(self):
         self.assertEqual(trim_entities([entity('line',a=[0,0],b=[3,0])],0,[1,0]),[])
+
+class TrimmedCircleUnionTests(unittest.TestCase):
+    def test_trimmed_overlapping_circles_form_one_closed_profile(self):
+        # Three overlapping circles with every inner arc trimmed. Rounded cut
+        # parameters used to leave ~1e-8 endpoint gaps that broke the loop.
+        import math
+        from geometry import regions,sample,_curve_endpoints
+        circles=[((46.20760136920751,-32.77708451693866),47.1355727532761),((-48.99806789714969,-30.129271173086195),53.95668855513207),((-6.447719017463655,-70.19353366813718),46.5130892987598)]
+        es=[entity('circle',center=list(c),radius=r) for c,r in circles]
+        inner=lambda p:any(math.dist(p,c)<r-1 for c,r in circles)
+        for _ in range(30):
+            hit=next(((i,p) for i,e in enumerate(es) for p in sample(e,400) if inner(p)),None)
+            if hit is None:break
+            es=trim_entities(es,*hit)
+        ends=[np.asarray(q) for e in es for q in _curve_endpoints(e)]
+        for p in ends:self.assertLess(min(np.linalg.norm(p-q) for q in ends if q is not p),1e-9)
+        self.assertEqual(len(regions({'entities':es})),1)

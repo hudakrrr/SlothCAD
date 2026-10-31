@@ -34,7 +34,7 @@ class SketchTools(Base):
         for x,y in points:
             self.ws.cursor=np.array([x,y],float);self.ws.draw_point(np.array([x,y],float))
         return created
-    def test_version(self):self.assertEqual(VERSION,'0.15')
+    def test_version(self):self.assertEqual(VERSION,'0.15.1')
     def test_three_point_circle(self):
         created=self.draw('circle_3p',[(10,0),(0,10),(-10,0)])
         self.assertEqual(len(created),1);self.assertEqual(created[0]['kind'],'circle')

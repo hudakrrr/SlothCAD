@@ -353,7 +353,7 @@ def profile_geometry(sketch):
 
 @lru_cache(maxsize=32)
 def _profile_geometry(encoded):
-    from trim import primitives,intersections,parameter,fragment,primitive_bounds
+    from trim import primitives,intersections,parameter,fragment,primitive_bounds,unique_parameters
     entities=json.loads(encoded)
     records=[];parts=[];cuts=[];touched=set()
     for e in entities:
@@ -378,7 +378,7 @@ def _profile_geometry(encoded):
                     # appear and break region validation during later features.
                     if t<1e-7:t=0.
                     elif t>1.-1e-7:t=1.
-                    cuts[index].add(round(t,10))
+                    cuts[index].add(t)
                     touched.add(records[index][0]['id'])
         active.append(i)
     split_ids={records[i][0]['id'] for i in range(len(parts)) if len(cuts[i])>2}
@@ -391,8 +391,8 @@ def _profile_geometry(encoded):
         if not split:
             if e['id'] not in expanded:result.append(e);expanded.add(e['id'])
             continue
-        values=sorted(cuts[i])
-        if parts[i].get('closed'):values=sorted(set(values+[.5]))
+        values=[0.]+[t for t in unique_parameters(cuts[i]) if 1e-9<t<1-1e-9]+[1.]
+        if parts[i].get('closed') and not any(abs(t-.5)<=1e-9 for t in values):values=sorted(values+[.5])
         for lo,hi in zip(values[:-1],values[1:]):
             if hi-lo<1e-9:continue
             piece=fragment(parts[i],lo,hi)
@@ -424,7 +424,16 @@ def _regions(encoded):
 
     if not open_edges:return result
 
-    def key(p):return tuple(round(float(v),7) for v in p)
+    # Merge endpoints by distance, not by rounding: two points 1e-8 apart can
+    # round to different keys and silently break an otherwise closed loop.
+    buckets={}
+    def key(p):
+        p=(float(p[0]),float(p[1]));cell=(math.floor(p[0]/EPS),math.floor(p[1]/EPS))
+        for dx in (-1,0,1):
+            for dy in (-1,0,1):
+                for q in buckets.get((cell[0]+dx,cell[1]+dy),()):
+                    if math.dist(p,q)<=EPS:return q
+        buckets.setdefault(cell,[]).append(p);return p
     half=[];outgoing={};reverse={}
     unique=[];signatures=set()
     for e in open_edges:

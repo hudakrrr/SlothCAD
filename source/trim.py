@@ -17,6 +17,17 @@ def _cached_cuts(entities,index,part,compute):
         _CUT_CACHE[key]=tuple(compute())
     return _CUT_CACHE[key]
 
+def unique_parameters(values,tolerance=1e-9):
+    """Sorted parameters with near-duplicates merged but no rounding.
+
+    Rounding to a fixed number of decimals moved trimmed endpoints by ~1e-8 on
+    larger arcs, so neighboring fragments no longer met at the same point.
+    """
+    result=[]
+    for t in sorted(float(v) for v in values):
+        if not result or t-result[-1]>tolerance:result.append(t)
+    return result
+
 def primitives(e):
     if e['kind']=='line':return [dict(kind='line',a=vec(e['a']),b=vec(e['b']))]
     if e['kind'] in ('rectangle','polygon'):
@@ -105,17 +116,17 @@ def trim_entities(entities,index,point,preview=False):
             for k,other in enumerate(primitives(e)):
                 if j==index and k==selected:continue
                 cuts.extend(parameter(target,q) for q in intersections(target,other))
-        return sorted(set(round(min(1,max(0,t)),10) for t in cuts))
+        return unique_parameters(min(1,max(0,t)) for t in cuts)
     # Hover previews call this on every repaint; the cut points only change when
     # the sketch does, so reuse them instead of re-intersecting everything.
     cuts=list(_cached_cuts(entities,index,selected,compute))
     clicked=parameter(target,point)
     if target.get('closed'):
-        cuts=sorted(set(0. if abs(t-1)<1e-8 else t for t in cuts))
+        cuts=unique_parameters(0. if abs(t-1)<1e-8 else t for t in cuts)
         intervals=[(cuts[i],cuts[(i+1)%len(cuts)]+(1 if i==len(cuts)-1 else 0)) for i in range(len(cuts))] if len(cuts)>1 else []
         clicked%=1
     else:
-        cuts=sorted(set([0.,1.]+cuts));intervals=list(zip(cuts[:-1],cuts[1:]));clicked=min(1,max(0,clicked))
+        cuts=unique_parameters([0.,1.]+[t for t in cuts if 1e-9<t<1-1e-9]);intervals=list(zip(cuts[:-1],cuts[1:]));clicked=min(1,max(0,clicked))
     remove=next((i for i,(lo,hi) in enumerate(intervals) if lo-1e-9<=clicked<=hi+1e-9 or target.get('closed') and lo<=clicked+1<=hi),None)
     if preview:
         return fragment(target,*intervals[remove]) if remove is not None else entities[index]

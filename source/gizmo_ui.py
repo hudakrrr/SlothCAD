@@ -84,6 +84,7 @@ class GizmoUI:
             edges=resolve_edges(result,f['edge_refs'])
             if not edges:return None
             box=result.val().BoundingBox();eps=max(1e-4,(box.xlen+box.ylen+box.zlen)*1e-4);convexity={}
+            curvature_step=eps*10
             def sample(edge,body,faces,t):
                 point=np.asarray(edge.positionAt(float(t)).toTuple());tangent=np.asarray(edge.tangentAt(float(t)).toTuple())
                 n1=np.asarray(faces[0].normalAt(cq.Vector(*point)).toTuple());n2=np.asarray(faces[1].normalAt(cq.Vector(*point)).toTuple())
@@ -97,7 +98,8 @@ class GizmoUI:
                     try:convex=not any(bool(body.isInside(cq.Vector(*(point+(a-b)*eps)))) for a,b in ((n1,n2),(n2,n1)))
                     except Exception:convex=True
                     convexity[edge.hashCode()]=convex
-                return H.edge_station(point,tangent,n1,n2,convex),point,(-outward if convex else outward)
+                normal_at=lambda i,q:np.asarray(faces[i].normalAt(cq.Vector(*q)).toTuple())
+                return H.edge_station(point,tangent,n1,n2,convex,normal_at,curvature_step),point,(-outward if convex else outward)
             stations_per_edge=[];arrow=None;nearest=None
             pick=getattr(self,'edge_pick_point',None)
             def face_key(face):return tuple(round(float(c),4) for c in face.Center().toTuple())
