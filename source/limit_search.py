@@ -41,7 +41,9 @@ def _python():
 def worker_count():
     if os.environ.get('SLOTHCAD_LIMIT_WORKERS', '').isdigit():
         return max(0, int(os.environ['SLOTHCAD_LIMIT_WORKERS']))
-    return max(2, min(4, (os.cpu_count() or 2) // 3))
+    # Each round narrows the bracket by workers + 1, so more workers mean fewer rounds; beyond
+    # about eight the extra trials no longer save a round (measured: 4→8 is ~30% faster, 12 is not).
+    return max(2, min(8, (os.cpu_count() or 2) // 3))
 
 
 class _Worker:

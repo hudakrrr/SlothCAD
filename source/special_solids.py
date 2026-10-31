@@ -49,6 +49,26 @@ def helix(f,thread=False):
     solid=cq.Solid.sweep(outer,[],path,True,True,transitionMode='round')
     return valid(solid,'Thread' if thread else 'Coil')
 
+def thread_tools(f):
+    """The thread groove as consecutive helical pieces of at most two turns.
+
+    One long swept groove (more than a handful of turns) makes OpenCASCADE's
+    booleans silently return an empty result, so the thread is cut piecewise.
+    Every piece starts at a whole number of turns, so the pieces meet exactly.
+    """
+    pitch=positive(f.get('pitch',2),'Pitch');height=positive(f.get('height',10),'Height')
+    helix(dict(f,height=min(height,pitch)),True)  # validates the thread parameters early
+    step=2*pitch;tools=[];z=0.;whole=None
+    while z<height-1e-9:
+        piece=min(step,height-z)
+        if piece<1e-6:break
+        # Every full piece is the same groove shifted up by whole turns: sweep it once.
+        if piece>=step-1e-9:
+            whole=whole or helix(dict(f,height=step),True);tools.append(whole.translate((0,0,z)))
+        else:tools.append(helix(dict(f,height=piece),True).translate((0,0,z)))
+        z+=step
+    return tools
+
 def path_solid(f,sketches,frames):
     path=path_wire(f.get('path'),sketches,frames);start=np.asarray(path.positionAt(0).toTuple());tangent=np.asarray(path.tangentAt(0).toTuple())
     if f['kind']=='pipe':
@@ -71,7 +91,9 @@ def operation(f,result,sketches,frames):
     kind=f['kind']
     if kind=='primitive':tool=valid(primitive(f),'Primitive')
     elif kind in ('coil','thread'):
-        tool=helix(f,kind=='thread').rotate((0,0,0),(0,0,1),37.3);a,d=axis_reference(f.get('axis',dict(type='origin',axis='Z')),result,sketches,frames);tool=orient(tool,a,d)
+        a,d=axis_reference(f.get('axis',dict(type='origin',axis='Z')),result,sketches,frames)
+        pieces=thread_tools(f) if kind=='thread' else [helix(f)]
+        pieces=[orient(piece.rotate((0,0,0),(0,0,1),37.3),a,d) for piece in pieces];tool=pieces[0]
     else:tool=path_solid(f,sketches,frames)
     if kind in ('primitive','coil','pipe') and f.get('operation','new')=='new':
         shapes=list(result.val().Solids())+[tool] if result is not None else [tool]
@@ -81,9 +103,10 @@ def operation(f,result,sketches,frames):
     if not picked or len({i for i,b in picked})!=len(picked):raise ModelError('Select distinct target bodies explicitly.')
     output=list(result.val().Solids());op='cut' if kind=='thread' else f.get('operation','join')
     if op not in ('join','cut','intersect'):raise ModelError('Choose New body, Join, Cut or Intersect.')
+    tools=pieces if kind=='thread' else [tool]
     for index,body in picked:
-        if body.intersect(tool).Volume()<1e-9:raise ModelError('This feature misses the target body. Check its path, position and size.')
-        edited=body.fuse(tool) if op=='join' else body.cut(tool) if op=='cut' else body.intersect(tool)
+        if all(body.intersect(piece).Volume()<1e-9 for piece in tools):raise ModelError('This feature misses the target body. Check its path, position and size.')
+        edited=body.fuse(tool) if op=='join' else body.cut(*tools) if op=='cut' else body.intersect(tool)
         edited=valid(edited.clean(),kind.title())
         if op=='join' and len(edited.Solids())!=1:raise ModelError('The feature must connect to the target body.')
         output[index]=edited

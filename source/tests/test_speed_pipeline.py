@@ -280,16 +280,16 @@ class QuickOutlineTests(unittest.TestCase):
 
 class StatusCacheTests(unittest.TestCase):
     def test_validity_is_computed_once_per_shape(self):
-        import model
+        import model, validity
         solid = Document(box_features()).solid.val()
         calls = []
-        original = solid.__class__.isValid
+        original = validity.shape_valid
         try:
-            solid.__class__.isValid = lambda self, *a, **k: (calls.append(1), original(self, *a, **k))[1]
+            validity.shape_valid = lambda *a, **k: (calls.append(1), original(*a, **k))[1]
             model._STATUS.clear()
             first = model._shape_status(solid); second = model._shape_status(solid)
         finally:
-            solid.__class__.isValid = original
+            validity.shape_valid = original
         self.assertEqual(first, second); self.assertTrue(first[0]); self.assertAlmostEqual(first[1], 20 * 12 * 10, places=3)
         self.assertEqual(len(calls), 1)
 

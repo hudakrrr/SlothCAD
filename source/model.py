@@ -55,7 +55,8 @@ def _shape_status(shape):
     with _STATUS_LOCK:
         for known,ok,volume in reversed(_STATUS):
             if known.isEqual(shape):return ok,volume
-    ok=bool(shape.isValid() and shape.Solids());volume=float(shape.Volume()) if ok else 0.
+    from validity import shape_valid
+    ok=bool(shape_valid(shape) and shape.Solids());volume=float(shape.Volume()) if ok else 0.
     with _STATUS_LOCK:
         _STATUS.append((shape,ok,volume));del _STATUS[:-16]
     return ok,volume
@@ -140,10 +141,8 @@ def _edge_trial_is_valid_fast(base,trial):
             known={face.hashCode() for face in base.val().Faces()}
             try:base._slothcad_face_ids=known
             except AttributeError:pass
-        from OCP.BRepCheck import BRepCheck_Analyzer
-        for face in value.Faces():
-            if face.hashCode() in known:continue
-            if not BRepCheck_Analyzer(face.wrapped).IsValid():return False
+        from validity import faces_valid
+        if not faces_valid([face for face in value.Faces() if face.hashCode() not in known]):return False
         return float(value.Volume())>1e-9
     except Exception:return False
 
@@ -181,6 +180,30 @@ def _loose_box(face):
     return _cached('loose-bounds',face,measure)
 
 
+def _plane_of(face):
+    """(unit normal, offset) of a planar face, or None."""
+    if face.geomType()!='PLANE':return None
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    plane=BRepAdaptor_Surface(face.wrapped).Plane();d=plane.Axis().Direction();o=plane.Location()
+    n=np.array([d.X(),d.Y(),d.Z()]);return n,float(n@np.array([o.X(),o.Y(),o.Z()]))
+
+
+def _base_planes(base):
+    planes=getattr(base,'_slothcad_planes',None)
+    if planes is None:
+        planes=[p for p in (_plane_of(face) for face in base.val().Faces()) if p is not None]
+        try:base._slothcad_planes=planes
+        except AttributeError:pass
+    return planes
+
+
+def _on_base_plane(face,planes,tolerance=1e-7):
+    plane=_plane_of(face)
+    if plane is None:return False
+    n,d=plane
+    return any(abs(abs(float(n@m))-1)<1e-9 and abs(d-(e if n@m>0 else -e))<=tolerance*max(1.,abs(d)) for m,e in planes)
+
+
 def _local_self_intersects(base,value):
     """Overlap check restricted to what the operation touched.
 
@@ -201,21 +224,26 @@ def _local_self_intersects(base,value):
         # already passed, so only a small, genuinely local change gets the overlap check.
         if len(changed)>LOCAL_CHECK_MAX_CHANGED:return False
         boxes={id(face):_loose_box(face) for face in faces}
+        # Faces that only got a new boundary (the big planar faces beside a fillet) are checked as
+        # neighbours but do not define where to look: on a plate their box is the whole body.
+        planes=_base_planes(base)
+        seeds=[face for face in changed if not _on_base_plane(face,planes)] or changed
         # group the new faces whose boxes touch (union-find)
-        parent=list(range(len(changed)))
+        parent=list(range(len(seeds)))
         def find(i):
             while parent[i]!=i:parent[i]=parent[parent[i]];i=parent[i]
             return i
-        for i in range(len(changed)):
-            for j in range(i+1,len(changed)):
-                a=boxes[id(changed[i])];b=boxes[id(changed[j])]
+        for i in range(len(seeds)):
+            for j in range(i+1,len(seeds)):
+                a=boxes[id(seeds[i])];b=boxes[id(seeds[j])]
                 if np.all(a[0]<=b[1]) and np.all(b[0]<=a[1]):parent[find(i)]=find(j)
         groups={}
-        for i,face in enumerate(changed):groups.setdefault(find(i),[]).append(face)
+        for i,face in enumerate(seeds):groups.setdefault(find(i),[]).append(face)
+        from validity import near_part
         for members in groups.values():
             low=np.min([boxes[id(f)][0] for f in members],axis=0);high=np.max([boxes[id(f)][1] for f in members],axis=0)
             chosen={id(f) for f in members}
-            near=[f for f in faces if id(f) not in chosen and np.all(boxes[id(f)][0]<=high) and np.all(boxes[id(f)][1]>=low)]
+            near=[near_part(f,low,high) for f in faces if id(f) not in chosen and np.all(boxes[id(f)][0]<=high) and np.all(boxes[id(f)][1]>=low)]
             compound=cq.Compound.makeCompound(members+near)
             if not BRepAlgoAPI_Check(compound.wrapped,True,True).IsValid():return True
         return False
@@ -246,7 +274,8 @@ def _healed(result):
     """The same body after tolerance repair and merging of coplanar seams, if that changes it."""
     try:
         shape=result.val();fixed=shape.fix().clean()
-        if fixed is None or fixed.isSame(shape) or not fixed.isValid():return None
+        from validity import shape_valid
+        if fixed is None or fixed.isSame(shape) or not shape_valid(fixed):return None
         return cq.Workplane('XY').newObject([fixed])
     except Exception:return None
 

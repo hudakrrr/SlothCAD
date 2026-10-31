@@ -487,6 +487,19 @@ def _regions(encoded):
         e=open_edges[half[h]['edge']];pts=sample(e,32 if e['kind'] in ('arc','spline','conic','ellipse') else 2)
         return pts if half[h]['forward'] else pts[::-1]
 
+    def simple_cycles(walk):
+        """Split a closed walk at repeated vertices into loops that visit each vertex once."""
+        cycles=[];stack=[];position={}
+        for h in walk:
+            node=half[h]['source']
+            if node in position:
+                start=position[node];cycles.append(stack[start:])
+                for item in stack[start:]:position.pop(half[item]['source'],None)
+                del stack[start:]
+            position[node]=len(stack);stack.append(h)
+        if stack:cycles.append(stack)
+        return [cycle for cycle in cycles if len(cycle)>=1]
+
     seen=set();found=set()
     for seed in range(len(half)):
         if half[seed]['edge'] in bridges:continue
@@ -496,20 +509,25 @@ def _regions(encoded):
             local[h]=len(walk);walk.append(h);h=next_half(h)
         seen.update(walk)
         if h!=seed or len(walk)<2:continue
-        points=[]
-        for i,item in enumerate(walk):
-            pts=directed_points(item)
-            points.extend(pts.tolist() if i==0 else pts[1:].tolist())
-        if len(points)<3:continue
-        poly=np.asarray(points,dtype=float)
-        area=.5*float(np.sum(poly[:-1,0]*poly[1:,1]-poly[1:,0]*poly[:-1,1]))
-        if not np.allclose(poly[0],poly[-1],atol=EPS):
-            area+=.5*float(poly[-1,0]*poly[0,1]-poly[0,0]*poly[-1,1])
-        if area<=EPS:continue
-        ids=tuple(open_edges[half[item]['edge']]['id'] for item in walk)
-        signature=frozenset(ids)
-        if signature not in found:
-            found.add(signature);result.append(list(ids))
+        # A face whose boundary touches itself (a hole meeting the outline at one vertex)
+        # is walked as one loop through that vertex twice, which is not a valid wire. Split
+        # it into simple loops: counter-clockwise ones bound the face, clockwise ones are the
+        # touching hole seen from outside (it is found again as its own region).
+        for cycle in simple_cycles(walk):
+            points=[]
+            for i,item in enumerate(cycle):
+                pts=directed_points(item)
+                points.extend(pts.tolist() if i==0 else pts[1:].tolist())
+            if len(points)<3:continue
+            poly=np.asarray(points,dtype=float)
+            area=.5*float(np.sum(poly[:-1,0]*poly[1:,1]-poly[1:,0]*poly[:-1,1]))
+            if not np.allclose(poly[0],poly[-1],atol=EPS):
+                area+=.5*float(poly[-1,0]*poly[0,1]-poly[0,0]*poly[-1,1])
+            if area<=EPS:continue
+            ids=tuple(open_edges[half[item]['edge']]['id'] for item in cycle)
+            signature=frozenset(ids)
+            if signature not in found:
+                found.add(signature);result.append(list(ids))
     return result
 
 def wire_for(sketch,ids,frame):

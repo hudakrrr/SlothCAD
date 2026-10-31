@@ -136,7 +136,7 @@ class SessionsUI:
         row_layout.addWidget(self.tabs);row_layout.addWidget(self.new_tab_button);row_layout.addStretch(1)
         # Exactly as tall as the menu bar, so the bar does not grow.
         self.tabs.setFixedHeight(bar_height);self.new_tab_button.setFixedSize(bar_height,bar_height)
-        row.setFixedHeight(bar_height);self.tab_row=row
+        row.setFixedHeight(bar_height);self.tab_row=row;self.tab_row_layout=row_layout
         row.setParent(self.menu_bar);row.show()
         self.menu_bar.installEventFilter(self)
         self.welcome=WelcomePage(self);self.feature_clipboard=None

@@ -23,5 +23,17 @@ class SpecialTests(unittest.TestCase):
         f=self.feature('thread',radius=5,height=9,pitch=2,thread_depth=.6,thread_width=1.2,targets=[ref],axis=dict(type='origin',axis='Z'));d.commit(d.features+[f]);self.assertLess(d.solid.val().Volume(),volume);self.assertTrue(d.solid.val().isValid())
         changed=copy.deepcopy(d.features);changed[1]['thread_width']=2
         with self.assertRaises(ModelError):d.commit(changed)
+    def test_long_external_and_internal_threads_cut(self):
+        # One swept groove of 12.5 turns made the boolean return nothing ("misses the target").
+        for shape,thread_type in (('cylinder','external'),('box','internal')):
+            base=self.feature('primitive',shape=shape,radius=8,height=25,width=30,length=30,origin=[-15,-15,0] if shape=='box' else [0,0,0],operation='new')
+            d=Document([base])
+            if shape=='box':
+                hole=self.feature('primitive',shape='cylinder',radius=8,height=25,operation='cut',targets=[body_reference(d.solid.val().Solids()[0],0,1,d.solid)]);d.commit(d.features+[hole])
+            volume=d.solid.val().Volume();ref=body_reference(d.solid.val().Solids()[0],0,1,d.solid)
+            f=self.feature('thread',radius=8,height=25,pitch=2,thread_depth=1.2,thread_width=1.2,thread_type=thread_type,targets=[ref],axis=dict(type='origin',axis='Z'))
+            d.commit(d.features+[f]);solid=d.solid.val()
+            self.assertTrue(solid.isValid());self.assertEqual(len(solid.Solids()),1)
+            self.assertGreater(abs(solid.Volume()-volume),300,thread_type)
 
 if __name__=='__main__':unittest.main()

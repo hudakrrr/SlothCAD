@@ -65,3 +65,21 @@ class NestedProfileTests(unittest.TestCase):
         for center,radius in [(np.array([0.,0.]),.0001),(np.array([1e8,1e8]),10.)]:
             e=entity('arc',a=(center+[-radius,0]).tolist(),mid=(center+[0,radius]).tolist(),b=(center+[radius,0]).tolist())
             c,r,angle,sweep=arc_data(e);np.testing.assert_allclose(c,center,atol=1e-8);self.assertAlmostEqual(r,radius)
+
+
+class TouchingHoleTests(unittest.TestCase):
+    def test_hole_touching_outline_at_one_vertex_extrudes(self):
+        # The outline walk passed the shared vertex twice; the invalid wire made every
+        # profile of the sketch fail with "degenerate or self-intersecting".
+        s=new_sketch(base_frame('XY'))
+        points=[(0,0),(5,0),(10,0),(10,10),(0,10)]
+        s['entities']=[entity('line',a=list(a),b=list(b)) for a,b in zip(points,points[1:]+points[:1])]
+        triangle=[(5,0),(6,3),(4,3)]
+        s['entities']+=[entity('line',a=list(a),b=list(b)) for a,b in zip(triangle,triangle[1:]+triangle[:1])]
+        found=profile_regions(s)
+        outer=max(found,key=lambda r:len(r['entities']))
+        self.assertEqual(len(outer['entities']),5);self.assertEqual(len(outer['holes']),1)
+        f=dict(kind='extrude',id='e',name='E',enabled=True,depth=2.,operation='add',
+               source=dict(type='sketch',sketch=s['id'],entities=outer['entities'],holes=outer['holes'],profile_mode='nested'))
+        solid=Document([s,f]).solid.val()
+        self.assertTrue(solid.isValid());self.assertAlmostEqual(solid.Volume(),(100-3)*2,places=6)

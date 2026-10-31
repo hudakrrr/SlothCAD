@@ -110,7 +110,15 @@ def body_corners(result):
     return np.asarray([[x,y,z] for x in (b.xmin,b.xmax) for y in (b.ymin,b.ymax) for z in (b.zmin,b.zmax)])
 
 def tapered_prism(outer,inner,vector,taper):
-    if not taper:return cq.Solid.extrudeLinear(outer,inner,tuple(vector))
+    if not taper:
+        solid=cq.Solid.extrudeLinear(outer,inner,tuple(vector))
+        # A hole touching the outline at one vertex gives an invalid face; cutting the
+        # hole prisms out of the plain outline handles that contact.
+        from validity import shape_valid
+        if not inner or shape_valid(solid):return solid
+        solid=cq.Solid.extrudeLinear(outer,[],tuple(vector))
+        for wire in inner:solid=solid.cut(cq.Solid.extrudeLinear(wire,[],tuple(vector)))
+        return solid
     # CadQuery intentionally ignores inner loops in tapered extrudeLinear.
     solid=cq.Solid.extrudeLinear(outer,[],tuple(vector),taper)
     for wire in inner:solid=solid.cut(cq.Solid.extrudeLinear(wire,[],tuple(vector),-taper))

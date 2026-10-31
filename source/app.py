@@ -1,8 +1,8 @@
-"""SlothCAD 0.15.1: main window, toolbars and feature editors."""
+"""SlothCAD 0.15.2: main window, toolbars and feature editors."""
 import copy
 import os
 import sys
-VERSION='0.15.1'
+VERSION='0.15.2'
 # The maximum fillet/chamfer size is searched by worker processes without blocking the window.
 LIMIT_ASYNC=os.environ.get('QT_QPA_PLATFORM','') not in ('offscreen','minimal') and os.environ.get('SLOTHCAD_SYNC_LIMITS','')!='1'
 DEFAULT_EXTRUDE_DEPTH=0.      # a new extrusion starts flat; the depth is set with the arrow or by typing
@@ -2579,6 +2579,41 @@ Face supports use geometric matching; ambiguous references stop rebuilding.""")
             self.stack.setCurrentWidget(self.workspace);self.set_project_chrome(True)
             self.workspace.set_mode('model');self.refresh(True);self.update_title()
         except Exception as e:self.error(e)
+    # ---- updates from GitHub
+    def check_for_update(self):
+        """Ask GitHub for a newer version in the background; a button appears when there is one."""
+        import updater
+        if not updater.enabled():return
+        signals=self._update_signals=_LimitSignals(self);signals.done.connect(self.update_found)
+        threading.Thread(target=lambda:signals.done.emit(updater.newer_version(VERSION)),name='SlothCAD-update-check',daemon=True).start()
+
+    def update_found(self,version):
+        if not version:return
+        self.update_version=version
+        button=getattr(self,'update_button',None)
+        if button is None:
+            button=self.update_button=QToolButton();button.setObjectName('updateButton');button.setFocusPolicy(Qt.NoFocus)
+            button.setCursor(Qt.PointingHandCursor);button.clicked.connect(self.install_update)
+            button.setStyleSheet('QToolButton#updateButton{background:palette(highlight);color:palette(highlighted-text);border:none;border-radius:4px;padding:1px 10px;font-weight:600;}')
+            self.tab_row_layout.addWidget(button)
+        button.setText(tr('Update available')+f' · {version}')
+        button.setToolTip(tr('SlothCAD {new} is available (you have {old}). Click to install it and restart.').format(new=version,old=VERSION))
+        button.show()
+
+    def install_update(self):
+        import updater
+        version=getattr(self,'update_version','')
+        answer=QMessageBox.question(self,tr('Update SlothCAD'),tr('Install SlothCAD {new} now? The changed files are downloaded from GitHub and SlothCAD restarts. You are asked to save unsaved projects first.').format(new=version))
+        if answer!=QMessageBox.Yes:return
+        try:count=self.run_busy('Downloading update…',updater.install)
+        except Exception as error:
+            self.error(error);return
+        if not count:
+            self.update_button.hide();self.show_status(tr('SlothCAD is already up to date.'),6000);return
+        project=self.path
+        if self.close():updater.restart(project)
+        else:QMessageBox.information(self,tr('Update SlothCAD'),tr('The update is installed. It takes effect the next time SlothCAD starts.'))
+
     def closeEvent(self,event):
         if self.loading:
             self.show_status('A CAD operation is still finishing; the window is responsive and will be ready shortly.')
@@ -2602,5 +2637,6 @@ def main():
     window=Window(start_with_project=False)
     if len(sys.argv)>1:window.load(sys.argv[1])
     splash.step('Almost ready…')
-    window.show();splash.finish(window);QTimer.singleShot(0,lambda:window.recover_autosave(startup=True));sys.exit(app.exec())
+    window.show();splash.finish(window);QTimer.singleShot(0,lambda:window.recover_autosave(startup=True))
+    QTimer.singleShot(3000,window.check_for_update);sys.exit(app.exec())
 if __name__=='__main__':main()
