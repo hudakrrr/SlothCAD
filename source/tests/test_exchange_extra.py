@@ -100,6 +100,13 @@ class ExportTests(unittest.TestCase):
 
 
 class AnalysisTests(unittest.TestCase):
+    def test_meshes_up_to_100000_triangles_are_accepted(self):
+        import exchange
+        from legacy_model import ModelError
+        self.assertEqual(exchange.MESH_TRIANGLE_LIMIT,100000)
+        with self.assertRaisesRegex(ModelError,'100,001 triangles.*up to 100,000'):
+            exchange._triangle_faces(np.zeros((3,3)),np.zeros((100001,3),dtype=int))
+
     def test_mass_properties_of_a_box(self):
         document=Document([plate()])
         result=document.mass_properties(density=7.85)

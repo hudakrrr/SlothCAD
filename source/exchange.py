@@ -7,7 +7,7 @@ import numpy as np
 from geometry import entity,identifier,validate_entity,arc_data,sample
 from legacy_model import ModelError
 
-MESH_TRIANGLE_LIMIT=60000      # a mesh becomes one kernel face per triangle before it is merged
+MESH_TRIANGLE_LIMIT=100000     # a mesh becomes one kernel face per triangle before it is merged
 
 
 class NoProgress:

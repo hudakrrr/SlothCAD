@@ -32,7 +32,7 @@ def main():
             send({'stage': text, 'start': float(start), 'end': float(end), 'estimate': float(estimate), 'count': count})
 
         def at(self, fraction):
-            # Only send visible steps (0.2 %), so a 60 000 triangle mesh does not flood the pipe.
+            # Only send visible steps (0.2 %), so a 100 000 triangle mesh does not flood the pipe.
             if fraction - self.last >= .002 or fraction >= 1:
                 self.last = fraction
                 send({'at': float(fraction)})
