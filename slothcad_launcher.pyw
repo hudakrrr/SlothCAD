@@ -23,7 +23,7 @@ def report(text):
     except OSError:
         log=None
     message='SlothCAD could not start.\n\n'+text.strip().splitlines()[-1]
-    if 'DLL load failed' in text:
+    if 'DLL load failed' in text or 'IVtkOCC' in text:
         message+=('\n\nA system library is missing. Installing the Microsoft Visual C++ '
                   'Redistributable (x64) usually fixes this:\nhttps://aka.ms/vs/17/release/vc_redist.x64.exe')
     if log is not None:message+=f'\n\nFull details: {log}'
@@ -35,6 +35,9 @@ def report(text):
 
 
 try:
+    # Load VTK first: if it fails here the real error (e.g. "DLL load failed") is reported.
+    # Inside CadQuery, OCP hides it and only "cannot import name 'IVtkOCC_Shape'" surfaces.
+    import vtk  # noqa: F401
     import app
     app.main()
 except SystemExit:

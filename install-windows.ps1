@@ -195,6 +195,35 @@ if (-not (Install-Packages (Join-Path $Code 'requirements.txt'))) {
     Fail 'Installing the Python packages failed. Check your internet connection and run the installer again. The messages above say which package failed.'
 }
 
+# CadQuery needs VTK and OCP's VTK bindings at import time. On Windows they fail to load
+# when the Visual C++ runtime is missing, or when an older environment kept a mismatched
+# pair; OCP then only says "cannot import name 'IVtkOCC_Shape'". Check, repair, check again.
+$CheckOcc = Join-Path $Code 'check_occ.py'
+& $VenvPython $CheckOcc 2>$null
+if ($LASTEXITCODE -eq 2) {
+    Say 'A system library (Microsoft Visual C++ Redistributable) is missing. Installing it; Windows may ask for permission...'
+    $redist = Join-Path $env:TEMP 'vc_redist.x64.exe'
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+    try {
+        Invoke-WebRequest -Uri 'https://aka.ms/vs/17/release/vc_redist.x64.exe' -OutFile $redist -UseBasicParsing
+        Start-Process -FilePath $redist -ArgumentList '/install','/passive','/norestart' -Wait | Out-Null
+    } catch {
+        Write-Host 'Could not install it automatically. Install it from https://aka.ms/vs/17/release/vc_redist.x64.exe' -ForegroundColor Yellow
+    }
+    Remove-Item $redist -ErrorAction SilentlyContinue
+    & $VenvPython $CheckOcc 2>$null
+}
+if ($LASTEXITCODE -ne 0) {
+    Say 'Reinstalling the OpenCascade and VTK packages...'
+    $pins = @(Select-String -Path (Join-Path $Code 'requirements.txt') -Pattern '^(cadquery-ocp|vtk)==' | ForEach-Object { $_.Line.Trim() })
+    & $VenvPython -m pip install --force-reinstall --no-deps --disable-pip-version-check --prefer-binary --no-input --progress-bar off @pins 2>$null | Out-Null
+    & $VenvPython $CheckOcc
+    if ($LASTEXITCODE -ne 0) {
+        Fail ('SlothCAD''s 3D libraries (VTK / OpenCascade) do not load; the error is shown above.' +
+              "`nInstall https://aka.ms/vs/17/release/vc_redist.x64.exe, restart Windows, delete $Target\.venv and run this installer again.")
+    }
+}
+
 Say 'Preparing the fast viewport module...'
 & $VenvPython (Join-Path $Code 'build_renderer.py')
 if ($LASTEXITCODE -ne 0) { Write-Host 'The fast viewport module is not available; SlothCAD uses its built-in renderer instead.' -ForegroundColor Yellow }

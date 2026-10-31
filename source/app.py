@@ -1,8 +1,8 @@
-"""SlothCAD 0.15.4: main window, toolbars and feature editors."""
+"""SlothCAD 0.15.5: main window, toolbars and feature editors."""
 import copy
 import os
 import sys
-VERSION='0.15.4'
+VERSION='0.15.5'
 # The maximum fillet/chamfer size is searched by worker processes without blocking the window.
 LIMIT_ASYNC=os.environ.get('QT_QPA_PLATFORM','') not in ('offscreen','minimal') and os.environ.get('SLOTHCAD_SYNC_LIMITS','')!='1'
 DEFAULT_EXTRUDE_DEPTH=0.      # a new extrusion starts flat; the depth is set with the arrow or by typing

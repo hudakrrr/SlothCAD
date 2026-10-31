@@ -1,4 +1,7 @@
 cadquery==2.7.0
+# CadQuery only bounds these loosely; an unmatched OCP/VTK pair fails at import on Windows.
+cadquery-ocp==7.8.1.1.post1
+vtk==9.3.1
 PySide6==6.8.3
 numpy>=2.0,<3
 scipy>=1.14,<2
