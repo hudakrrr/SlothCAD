@@ -1,8 +1,8 @@
-"""SlothCAD 0.15.6: main window, toolbars and feature editors."""
+"""SlothCAD 0.15.7: main window, toolbars and feature editors."""
 import copy
 import os
 import sys
-VERSION='0.15.6'
+VERSION='0.15.7'
 # The maximum fillet/chamfer size is searched by worker processes without blocking the window.
 LIMIT_ASYNC=os.environ.get('QT_QPA_PLATFORM','') not in ('offscreen','minimal') and os.environ.get('SLOTHCAD_SYNC_LIMITS','')!='1'
 DEFAULT_EXTRUDE_DEPTH=0.      # a new extrusion starts flat; the depth is set with the arrow or by typing
@@ -299,7 +299,7 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         row=QWidget();row.setObjectName('contextBar');row_layout=QHBoxLayout(row);row_layout.setContentsMargins(0,0,0,0);row_layout.setSpacing(12)
         row_layout.addWidget(self.ribbon,0,Qt.AlignTop)
         measure_group={}
-        measure_panel=self.ribbon_group(row_layout,'INSPECT',[('Measure','measure',self.toggle_measure),('Repair','repair',self.open_reference_recovery)],measure_group,True)
+        measure_panel=self.ribbon_group(row_layout,'INSPECT',[('Measure','measure',self.toggle_measure),('Section','section',lambda checked=False:self.toggle_section(checked)),('Repair','repair',self.open_reference_recovery)],measure_group,True)
         self.inspect_buttons=measure_group;self.measure_button=measure_group['measure'];measure_group['repair'].setCheckable(False)
         # Match the mode ribbon's 3 px top inset so Inspect actions share the
         # exact same top baseline as sketch and solid tools.
@@ -330,7 +330,9 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         self.collapse_browser=QToolButton();self.collapse_browser.setObjectName('browserCollapse');self.collapse_browser.setText('–');self.collapse_browser.setToolTip(tr('Collapse / expand'));self.collapse_browser.setFocusPolicy(Qt.NoFocus)
         header.addWidget(self.collapse_browser);layout.addWidget(header_bar)
         self.objects=VisibilityTree();self.objects.setObjectName('objectBrowser');self.objects.setHeaderHidden(True);self.objects.setColumnCount(1);self.objects.setIconSize(QSize(18,18));self.objects.setIndentation(16);self.objects.setUniformRowHeights(True)
-        self.objects.itemChanged.connect(self.visibility_changed);self.objects.itemClicked.connect(self.object_clicked);self.objects.itemDoubleClicked.connect(self.object_edit);layout.addWidget(self.objects,1)
+        self.objects.itemChanged.connect(self.visibility_changed);self.objects.setContextMenuPolicy(Qt.CustomContextMenu);self.objects.customContextMenuRequested.connect(self.objects_menu)
+        self.objects.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        rename_action=QAction(self.objects);rename_action.setShortcut(QKeySequence(Qt.Key_F2));rename_action.setShortcutContext(Qt.WidgetWithChildrenShortcut);rename_action.triggered.connect(lambda:self.rename_object());self.objects.addAction(rename_action);self.objects.itemClicked.connect(self.object_clicked);self.objects.itemDoubleClicked.connect(self.object_edit);layout.addWidget(self.objects,1)
         hint=QLabel(tr('Check to show · Double-click sketch to edit'));hint.setWordWrap(True);hint.setObjectName('subtle');layout.addWidget(hint)
         self.browser_parts=[self.objects];self.float_left=left
         self.objects.setFrameShape(QFrame.NoFrame);self.objects.viewport().setAutoFillBackground(False);hint.hide();self.objects.setToolTip(tr('Check to show · Double-click sketch to edit'))
@@ -1013,7 +1015,7 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         self.select(index)
         if self.doc.features[index]['kind']=='sketch' and self.selected==index and self.draft is None:self.edit_selected_sketch()
     def rebuild_objects(self):
-        bodies_state=tuple(sorted(self.doc.display.get('bodies',{}).items()));sketch_state=tuple(sorted(self.doc.display.get('sketches',{}).items()))
+        bodies_state=(tuple(sorted(self.doc.display.get('bodies',{}).items())),tuple(sorted(self.doc.display.get('body_names',{}).items())));sketch_state=tuple(sorted(self.doc.display.get('sketches',{}).items()))
         draft_id=self.draft.get('id') if isinstance(self.draft,dict) and self.draft.get('kind')=='sketch' else None
         signature=(id(self.doc),getattr(self.doc,'revision',0),bodies_state,sketch_state,tuple(sorted(self.doc.display.get("surfaces",{}).items())),self.workspace.mode,draft_id,tuple(sorted(self.doc.display.get('construction',{}).items())))
         if self.object_tree_signature==signature:return
@@ -1022,19 +1024,20 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         bodies=QTreeWidgetItem(self.objects,[tr('Bodies')]);bodies.setIcon(0,icon('body'))
         if self.doc.solid:
             for i,body in enumerate(self.doc.solid.val().Solids()):
-                item=QTreeWidgetItem(bodies,[f'{tr("Body")} {i+1}']);item.setIcon(0,icon('body'));item.setData(0,Qt.UserRole,{'type':'bodies','id':str(i)})
+                name=self.doc.display.get('body_names',{}).get(str(i)) or f'{tr("Body")} {i+1}'
+                item=QTreeWidgetItem(bodies,[name]);item.setIcon(0,icon('body'));item.setData(0,Qt.UserRole,{'type':'bodies','id':str(i),'name':name})
                 item.setFlags(item.flags()|Qt.ItemIsUserCheckable);item.setCheckState(0,Qt.Checked if self.doc.display.get('bodies',{}).get(str(i),True) else Qt.Unchecked)
                 item.setToolTip(0,tr('Toggle visibility; double-click to change this body’s color/finish.'))
         from surface_tools import bodies as surface_bodies
         if surface_bodies(self.doc.frames):
             group=QTreeWidgetItem(self.objects,[tr('Surfaces')]);group.setIcon(0,icon('surface_patch'));group.setExpanded(True)
             for id_,body in surface_bodies(self.doc.frames).items():
-                item=QTreeWidgetItem(group,[body['name']]);item.setIcon(0,icon('surface_patch'));item.setData(0,Qt.UserRole,dict(type='surfaces',id=id_));item.setFlags(item.flags()|Qt.ItemIsUserCheckable);item.setCheckState(0,Qt.Checked if self.doc.display.get('surfaces',{}).get(id_,True) else Qt.Unchecked)
+                item=QTreeWidgetItem(group,[body['name']]);item.setIcon(0,icon('surface_patch'));item.setData(0,Qt.UserRole,dict(type='surfaces',id=id_,name=body['name']));item.setFlags(item.flags()|Qt.ItemIsUserCheckable);item.setCheckState(0,Qt.Checked if self.doc.display.get('surfaces',{}).get(id_,True) else Qt.Unchecked)
         sketches=QTreeWidgetItem(self.objects,[tr('Sketches')]);sketches.setIcon(0,icon('sketch'))
         consumed={source['sketch'] for f in self.doc.features if f.get('enabled',True) and f.get('kind')=='extrude' for source in (extrusion_sources(f) if 'source' in f or 'sources' in f else []) if source.get('type')=='sketch'}
         for i,f in enumerate(self.doc.features):
             if f['kind'] not in ('sketch',)+SPATIAL_TOOLS:continue
-            item=QTreeWidgetItem(sketches,[f['name']]);item.setIcon(0,icon('sketch'));item.setData(0,Qt.UserRole,{'type':'sketches','id':f['id'],'index':i})
+            item=QTreeWidgetItem(sketches,[f['name']]);item.setIcon(0,icon('sketch'));item.setData(0,Qt.UserRole,{'type':'sketches','id':f['id'],'index':i,'name':f['name']})
             item.setFlags(item.flags()|Qt.ItemIsUserCheckable);visible=self.doc.display.get('sketches',{}).get(f['id'],self.workspace.mode=='extrude' or self.workspace.extrude_selecting or f['id'] not in consumed)
             active=self.workspace.mode=='sketch' and self.draft and self.draft.get('id')==f['id']
             item.setCheckState(0,Qt.Checked if active or (visible and f.get('enabled',True)) else Qt.Unchecked)
@@ -1049,18 +1052,52 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         construction_group=QTreeWidgetItem(self.objects,[tr('Construction')]);construction_group.setIcon(0,icon('construct'))
         for i,f in enumerate(self.doc.features):
             if f['kind'] not in CONSTRUCTIONS:continue
-            item=QTreeWidgetItem(construction_group,[f['name']]);item.setIcon(0,icon(f['kind']));item.setData(0,Qt.UserRole,{'type':'construction','id':f['id'],'index':i})
+            item=QTreeWidgetItem(construction_group,[f['name']]);item.setIcon(0,icon(f['kind']));item.setData(0,Qt.UserRole,{'type':'construction','id':f['id'],'index':i,'name':f['name']})
             item.setFlags(item.flags()|Qt.ItemIsUserCheckable);item.setCheckState(0,Qt.Checked if self.doc.display.get('construction',{}).get(f['id'],True) else Qt.Unchecked)
             item.setToolTip(0,tr('Double-click a plane to start a sketch. Edit construction parameters from the timeline.'))
         bodies.setExpanded(True);sketches.setExpanded(True);construction_group.setExpanded(True);self.objects.blockSignals(False)
     def visibility_changed(self,item,column):
-        self.invalidate_preview()
         data=item.data(0,Qt.UserRole)
+        if data and 'name' in data and item.text(0)!=data['name']:
+            self.finish_rename(item,data);return
+        self.invalidate_preview()
         if not data:return
         self.doc.display.setdefault(data['type'],{})[data['id']]=item.checkState(0)==Qt.Checked
         self.object_tree_signature=None
         self.workspace.construction_items=[(f['id'],f['name'],self.doc.frames[f['id']]) for f in self.doc.features if f['kind'] in CONSTRUCTIONS and f['id'] in self.doc.frames and self.doc.display.get('construction',{}).get(f['id'],True)]
         self.set_scene_responsive(self.visible_solid(),self.scene_sketches(),materials=self.body_materials());self.update_title()
+    RENAMABLE=('bodies','sketches','construction','surfaces')
+    def objects_menu(self,position):
+        item=self.objects.itemAt(position);data=item.data(0,Qt.UserRole) if item else None
+        if not data or data.get('type') not in self.RENAMABLE:return
+        menu=QMenu(self);rename=menu.addAction(tr('Rename')+'\tF2')
+        chosen=menu.exec(self.objects.viewport().mapToGlobal(position))
+        if chosen is rename:self.rename_object(item)
+    def rename_object(self,item=None):
+        """Edit a browser item's name in place (Rename in its menu, or F2)."""
+        item=item or self.objects.currentItem();data=item.data(0,Qt.UserRole) if item else None
+        if not data or data.get('type') not in self.RENAMABLE:return
+        self.objects.blockSignals(True);item.setFlags(item.flags()|Qt.ItemIsEditable);self.objects.blockSignals(False)
+        self.objects.setCurrentItem(item);self.objects.editItem(item,0)
+    def finish_rename(self,item,data):
+        name=item.text(0).strip()
+        self.objects.blockSignals(True);item.setFlags(item.flags()&~Qt.ItemIsEditable)
+        if not name:item.setText(0,data['name'])
+        self.objects.blockSignals(False)
+        if not name or name==data['name']:return
+        if data['type']=='bodies':
+            names=self.doc.display.setdefault('body_names',{})
+            if name==f'{tr("Body")} {int(data["id"])+1}':names.pop(data['id'],None)
+            else:names[data['id']]=name
+            if not names:self.doc.display.pop('body_names',None)
+        else:
+            self.doc.rename_feature(data['id'],name)
+            # An open editor of the same feature must not write the old name back on Apply/Finish.
+            if isinstance(self.draft,dict) and self.draft.get('id')==data['id']:self.draft['name']=name;self.show_editor()
+        data=dict(data,name=name)
+        self.objects.blockSignals(True);item.setData(0,Qt.UserRole,data);self.objects.blockSignals(False)
+        self.object_tree_signature=None;self.rebuild_timeline();self.update_title()
+        self.show_status(tr('Renamed to')+' '+name)
     def object_clicked(self,item,column):
         data=item.data(0,Qt.UserRole)
         if data and data['type']=='bodies' and self.pick_body_from_browser(int(data['id'])):return
@@ -1127,7 +1164,7 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         action(self.tools_menu,'Check interference',self.check_interference)
         action(self.tools_menu,'Bill of materials…',self.show_bill_of_materials)
         self.tools_menu.addSeparator()
-        action(self.tools_menu,'Section view',lambda:self.section_button.setChecked(not self.section_button.isChecked()),'Ctrl+Alt+S')
+        action(self.tools_menu,'Section analysis',lambda:self.section_button.setChecked(not self.section_button.isChecked()),'Ctrl+Alt+S')
         action(self.tools_menu,'Zoom to selection',lambda:self.workspace.fit_selection())
         self.settings_menu=QMenu(tr('Settings'),self.menu_bar);self.settings_menu.setProperty('_i18n_title','Settings');self.settings_menu_action=self.menu_bar.addMenu(self.settings_menu)
         action(self.settings_menu,'Appearance…',self.appearance_settings)

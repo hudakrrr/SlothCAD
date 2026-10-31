@@ -852,6 +852,25 @@ class Document:
         self.revision+=1;self.build_error=None
         return True
 
+    def rename_feature(self,feature_id,name):
+        """Give a feature (sketch, construction, surface...) a new name: undoable, no rebuild."""
+        index=next((i for i,f in enumerate(self.features) if f.get('id')==feature_id),None)
+        if index is None or not name or self.features[index].get('name')==name:return False
+        features=copy.deepcopy(self.features);features[index]['name']=name
+        self.undo_stack.append(copy.deepcopy(self.features));self._undo_parameters.append(copy.deepcopy(self.parameters))
+        del self.undo_stack[:-100];del self._undo_parameters[:-100]
+        self.redo_stack.clear();self._redo_parameters.clear()
+        with self._lock:
+            self.features=features
+            if isinstance(self.sketches.get(feature_id),dict):
+                self.sketches=dict(self.sketches);self.sketches[feature_id]=features[index]
+            surfaces=self.frames.get('_surfaces',{}) if isinstance(self.frames,dict) else {}
+            if isinstance(surfaces.get(feature_id),dict):
+                self.frames=dict(self.frames);self.frames['_surfaces']=dict(surfaces);self.frames['_surfaces'][feature_id]=dict(surfaces[feature_id],name=name)
+            self._preview_memo.clear()
+        self.revision+=1
+        return True
+
     def set_parameters(self,parameters,progress=None):
         """Replace the parameter table and rebuild; one undo step like any other edit."""
         return self.commit(self.features,progress,parameters)
@@ -991,7 +1010,8 @@ class Document:
         records=entries(self.solid);names=[]
         for index,body in enumerate(self.solids()):
             record=next((r for r in records if r['shape'].isSame(body)),None)
-            names.append(owner.get(record['id']) if record and record['id'] in owner else f'Body {index+1}')
+            given=(self.display.get('body_names',{}) if isinstance(self.display,dict) else {}).get(str(index))
+            names.append(owner.get(record['id']) if record and record['id'] in owner else given or f'Body {index+1}')
         return names
 
     def body_color(self,index):

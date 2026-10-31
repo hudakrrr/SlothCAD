@@ -192,6 +192,8 @@ class Workspace(WorkspaceBase):
     constraint_selected=Signal(str)
     constraint_delete_requested=Signal(str)
     constraint_edit_requested=Signal(str)
+    section_dragged=Signal(float)
+    section_face_picked=Signal(int)
     def __init__(self):
         super().__init__()
         self.gizmo=ViewportGizmo(self)
@@ -209,6 +211,7 @@ class Workspace(WorkspaceBase):
         self.slot_accept=None                 # kinds a click may pick right now (see slot_hit), or None
         self.perspective=False                # perspective camera in the 3D view (sketches stay orthographic)
         self.section=None                     # dict(normal=[x,y,z], distance=mm): the model is cut by that plane
+        self.section_drag=None;self.section_face_picking=False;self.section_cap=None;self.clip_cache=None
         self.constrained_entities=set()       # sketch entities that are fully constrained (drawn in green)
         self.edge_tangent_chain=True
         self.mode='model'; self.tool='select'; self.grid=1.; self.snap_enabled=True;self.show_grid=True;self.show_axes=True;self.show_aa=True
@@ -577,6 +580,8 @@ class Workspace(WorkspaceBase):
     def keyPressEvent(self,e):
         self.flush_motion()
         if self.gizmo.key(e):e.accept();return
+        if e.key()==Qt.Key_Escape and self.section_face_picking:
+            self.section_face_picking=False;self.setCursor(Qt.ArrowCursor);self.message.emit(tr('Face picking for the section canceled.'));e.accept();return
         if e.key()==Qt.Key_Escape and self.sketch_drag_active:
             self.sketch_drag_active=False;self.sketch_drag_ref=None;self.sketch_drag_cancelled.emit();e.accept();return
         if self.measure_active:
@@ -639,15 +644,50 @@ class Workspace(WorkspaceBase):
         return normal/length,float(self.section['distance'])
 
     def set_section(self,section):
-        self.section=section;self.pick_cache=None;self.cache_key=None;self.update()
+        self.section=section;self.pick_cache=None;self.cache_key=None
+        if section is None:self.section_drag=None
+        self.update()
 
     def kept_triangles(self):
-        """Boolean mask of the triangles the section leaves visible (None when nothing is cut)."""
+        """Boolean mask of the triangles the section leaves (partly) visible, None when nothing is cut."""
         plane=self.section_plane()
         if plane is None or not len(self.triangles):return None
         normal,distance=plane
-        centroids=self.vertices[self.triangles].mean(axis=1)
-        return centroids@normal<=distance+1e-9
+        return ((self.vertices[self.triangles]@normal)<=distance+1e-9).any(axis=1)
+
+    def section_cap_for(self,section):
+        """The exact cut faces for ``section``; computed shortly after the plane stops moving
+        (a kernel intersection per frame would make dragging stutter on big parts)."""
+        key=(self.revision,repr(section.get('normal')),section.get('distance'))
+        if self.section_cap is not None and self.section_cap[0]==key:return self.section_cap[1]
+        if not hasattr(self,'section_cap_timer'):
+            self.section_cap_timer=QTimer(self);self.section_cap_timer.setSingleShot(True);self.section_cap_timer.timeout.connect(self.compute_section_cap)
+        self.section_cap_timer.start(40 if self.section_drag is None else 120)
+        return None
+
+    def compute_section_cap(self):
+        if not self.section or self.mesh_shape is None:return
+        from section_ui import section_cap
+        normal,distance=self.section_plane();key=(self.revision,repr(self.section.get('normal')),self.section.get('distance'))
+        try:cap=section_cap(self.mesh_shape,normal,distance)
+        except Exception:cap=[]
+        self.section_cap=(key,cap);self.update()
+
+    def section_handle(self):
+        """``(base, tip, screen vector of 1 mm along the axis)`` of the section's drag arrow."""
+        if not self.section or self.mode=='sketch' or 'anchor' not in self.section:return None
+        anchor=np.asarray(self.section['anchor'],float);axis=np.asarray(self.section['axis'],float)
+        base=self.project([anchor])[0][0];unit=self.project([anchor+axis])[0][0]-base
+        length=float(np.linalg.norm(unit))
+        visual=unit/length if length>self.scale()*.15 else np.array([-.70710678,-.70710678])
+        return base,base+visual*80.,unit if length>1e-12 else visual*self.scale()
+
+    def section_handle_hit(self,position):
+        handle=self.section_handle()
+        if handle is None:return False
+        base,tip,_=handle;point=np.array([position.x(),position.y()]);d=tip-base
+        t=np.clip((point-base)@d/(d@d),0.,1.)
+        return float(np.linalg.norm(point-(base+t*d)))<=12
     def body_material(self,index):
         value=self.materials.get(str(index),self.materials.get('default',{})) if isinstance(self.materials,dict) else {}
         color=value.get('color','#4baed6') if isinstance(value,dict) else '#4baed6'
@@ -686,10 +726,17 @@ class Workspace(WorkspaceBase):
                 self.empty_ids=np.full((height,width),-1,np.int32);self.empty_size=(width,height)
             self.pixels=None;self.depth=self.empty_depth;self.face_buffer=self.empty_ids
         else:
-            v=(self.vertices-self.center)@self.rotation().T;screen,_=self.project(self.vertices)
-            triangles=self.triangles;face_ids=self.face_ids;bases,codes=self.triangle_materials()
-            keep=self.kept_triangles()
-            if keep is not None:triangles,face_ids,bases,codes=triangles[keep],face_ids[keep],bases[keep],codes[keep]
+            vertices=self.vertices;triangles=self.triangles;face_ids=self.face_ids;bases,codes=self.triangle_materials()
+            plane=self.section_plane()
+            if plane is not None:
+                # Triangles crossing the section are split at the plane: walls end cleanly at the cut.
+                clip_key=(self.revision,repr(self.section.get('normal')),self.section.get('distance'))
+                if self.clip_cache is None or self.clip_cache[0]!=clip_key:
+                    from section_ui import clip_mesh
+                    self.clip_cache=(clip_key,clip_mesh(self.vertices,self.triangles,*plane))
+                vertices,triangles,owner=self.clip_cache[1]
+                face_ids,bases,codes=face_ids[owner],bases[owner],codes[owner]
+            v=(vertices-self.center)@self.rotation().T;screen,_=self.project(vertices)
             normals=np.cross(v[triangles[:,1]]-v[triangles[:,0]],v[triangles[:,2]]-v[triangles[:,0]])
             lengths=np.linalg.norm(normals,axis=1);lengths[lengths==0]=1;normals/=lengths[:,None]
             light=np.array([-.3,.4,.85]);light/=np.linalg.norm(light);brightness=.42+.58*np.abs(normals@light)
@@ -1288,6 +1335,13 @@ class Workspace(WorkspaceBase):
         self.flush_motion()
         self.setFocus();self.last=QPointF(e.position());self.press_position=QPointF(e.position());self.drag=False;self.press_modifiers=e.modifiers();self.box=None
         if e.button()==Qt.LeftButton and self.gizmo.press(e.position()):return
+        if e.button()==Qt.LeftButton and self.section_face_picking and self.mode!='sketch':
+            face_id,_=self.body_hit(e.position())
+            if face_id>=0:self.section_face_picked.emit(int(face_id))
+            return
+        if e.button()==Qt.LeftButton and self.section_handle_hit(e.position()):
+            self.section_drag=dict(start=np.array([e.position().x(),e.position().y()]),position=float(self.section.get('position',0.)),unit=self.section_handle()[2].copy())
+            self.setCursor(Qt.SizeAllCursor);self.update();return
         if self.measure_active:return
         if self.mode=='edge' and e.button()==Qt.LeftButton:
             self.edge_click_pending=True   # toggled on release unless the pointer was dragged (orbit)
@@ -1559,6 +1613,13 @@ class Workspace(WorkspaceBase):
             if self.gizmo.consume_release:
                 if self.gizmo.dragging:self.gizmo.move(position)
                 self.last=position;self.update();return
+            if self.section_drag is not None:
+                drag=self.section_drag;unit=drag['unit'];delta=np.array([position.x(),position.y()])-drag['start']
+                amount=float(delta@unit/(unit@unit))
+                step=self.adaptive_grid_step(4) if self.snap_enabled else 0
+                value=drag['position']+amount
+                if step:value=round(value/step)*step
+                self.section_dragged.emit(value);self.last=position;self.update();return
             if buttons&Qt.LeftButton and not buttons&(Qt.RightButton|Qt.MiddleButton) and self.press_position is not None and self.drag and self.box_wanted():
                 self.box=dict(start=QPointF(self.press_position),current=QPointF(position));self.last=position
                 self.update();return
@@ -1618,6 +1679,8 @@ class Workspace(WorkspaceBase):
     def mouseReleaseEvent(self,e):
         # Apply the final position even if release arrives before the 16 ms tick.
         self.queue_motion(e.position(),e.buttons()|e.button());self.flush_motion()
+        if self.section_drag is not None and e.button()==Qt.LeftButton:
+            self.section_drag=None;self.setCursor(Qt.ArrowCursor);self.press_position=None;self.drag=False;self.update();return
         if e.button()==Qt.LeftButton and not self.drag and self.box is None and self.mode!='sketch' and not self.gizmo.dragging:
             side=self.cube_face_at(e.position())
             if side:
@@ -2089,6 +2152,8 @@ class Workspace(WorkspaceBase):
             for points in self.path_hover['lines']:
                 self.draw_polyline(p,self.project_local(points,self.path_hover['frame']),'#f0ad45',4)
         self.paint_box(p)
+        from section_ui import paint_section
+        paint_section(self,p)
         self.gizmo.paint(p)
 
     def cached_background(self):

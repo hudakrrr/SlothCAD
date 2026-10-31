@@ -3,7 +3,7 @@ import copy
 import numpy as np
 
 def remap(previous, current, display):
-    if not any(display.get(key) for key in ('materials', 'bodies')):
+    if not any(display.get(key) for key in ('materials', 'bodies', 'body_names')):
         return display
     old = previous.val().Solids() if previous is not None else []
     new = current.val().Solids() if current is not None else []
@@ -43,7 +43,7 @@ def remap(previous, current, display):
             if np.all(lengths>1e-8): overlaps.append(i)
         if len(overlaps)==1: owners[j]=overlaps[0]
     result=copy.deepcopy(display)
-    for field in ('materials','bodies'):
+    for field in ('materials','bodies','body_names'):
         if field in display:
             result[field]={str(j):copy.deepcopy(display[field][str(i)])
                            for j,i in owners.items() if str(i) in display[field]}
