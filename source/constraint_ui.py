@@ -41,6 +41,9 @@ class ConstraintUI:
         w.sketch_drag_moved.connect(self.move_sketch_drag)
         w.sketch_drag_finished.connect(self.finish_sketch_drag)
         w.sketch_drag_cancelled.connect(self.cancel_sketch_drag)
+        w.constraint_selected.connect(self.constraint_label_selected)
+        w.constraint_delete_requested.connect(self.delete_constraint)
+        w.constraint_edit_requested.connect(self.edit_constraint_label)
         self.drag_baseline=None;self.drag_generation=0;self.drag_result=None;self.drag_running=False;self.drag_target=None
         self.drag_timer=QTimer(self);self.drag_timer.setInterval(16);self.drag_timer.timeout.connect(self.poll_sketch_drag)
 
@@ -91,15 +94,40 @@ class ConstraintUI:
         row=self.constraint_list.currentRow()
         return self.draft.get('constraints',[])[row] if row>=0 else None
 
+    def constraint_by_id(self,constraint_id):
+        if not self.draft or self.draft.get('kind')!='sketch' or not constraint_id:return None
+        return next((c for c in self.draft.get('constraints',[]) if c.get('id')==constraint_id),None)
+
+    def constraint_label_selected(self,constraint_id):
+        """A dimension or constraint label was clicked in the sketch (empty id: cleared)."""
+        c=self.constraint_by_id(constraint_id)
+        self.entity_index=None;self.precise_draft=None
+        self.show_editor()
+        if c is not None:
+            what=tr('Dimension') if c['kind']=='dimension' else tr(LABELS.get(c['kind'],c['kind']))
+            self.show_status(what+' '+tr('selected · Delete removes it (the sketch stays) · double-click edits the value' if c['kind']=='dimension' else 'selected · Delete removes it (the sketch stays)'))
+
+    def delete_constraint(self,constraint_id):
+        c=self.constraint_by_id(constraint_id)
+        self.workspace.selected_constraint=None
+        if c is None:self.workspace.update();return
+        if c.get('projection_lock'):self.show_status(tr('Break the projection link before editing this geometry.'));return
+        self.sketch_change();self.draft['constraints']=[item for item in self.draft['constraints'] if item is not c]
+        self.constraint_feedback='';self.constraint_conflicts=[];self.workspace.constraint_feedback='';self.workspace.constraint_refs=[]
+        self.workspace.update();self.show_editor()
+        self.show_status(tr('Dimension deleted; the sketch geometry is kept.') if c['kind']=='dimension' else tr('Constraint deleted; the sketch geometry is kept.'))
+
+    def edit_constraint_label(self,constraint_id):
+        c=self.constraint_by_id(constraint_id)
+        if c is not None and c['kind']=='dimension':self.edit_sketch_dimension(c)
+
     def remove_sketch_constraint(self):
         c=self.selected_constraint()
         if c is None:return
-        if c.get('projection_lock'):self.show_status(tr('Break the projection link before editing this geometry.'));return
-        self.sketch_change();self.draft['constraints'].remove(c);self.constraint_feedback='';self.constraint_conflicts=[]
-        self.workspace.constraint_feedback='';self.workspace.update();self.show_editor()
+        self.delete_constraint(c.get('id')) if c.get('id') else None
 
-    def edit_sketch_dimension(self):
-        c=self.selected_constraint()
+    def edit_sketch_dimension(self,c=None):
+        c=c if c is not None else self.selected_constraint()
         if c is None or c['kind']!='dimension':return
         from PySide6.QtWidgets import QInputDialog
         if c.get('reference'):return
@@ -203,12 +231,17 @@ class ConstraintUI:
                 self.constraint_list.addItem(text)
                 if c['id'] in self.constraint_conflicts:self.constraint_list.item(self.constraint_list.count()-1).setForeground(Qt.red)
             self.editor_layout.addWidget(QLabel(tr('Constraints')));self.editor_layout.addWidget(self.constraint_list)
+            chosen=self.workspace.selected_constraint
+            row=next((i for i,c in enumerate(constraints) if chosen and c.get('id')==chosen),-1)
+            if row>=0:self.constraint_list.setCurrentRow(row)
             self.constraint_list.itemClicked.connect(lambda item:self.highlight_constraint())
             self.edit_constraint_button=self.button('Edit selected dimension',self.edit_sketch_dimension);self.edit_constraint_button.setEnabled(False)
             self.remove_constraint_button=self.button('Remove selected constraint',self.remove_sketch_constraint);self.remove_constraint_button.setEnabled(False)
+            if row>=0:self.highlight_constraint()
 
     def highlight_constraint(self):
         c=self.selected_constraint();self.workspace.constraint_refs=c['refs'] if c else []
+        self.workspace.selected_constraint=c.get('id') if c else None
         self.edit_constraint_button.setEnabled(c is not None and c['kind']=='dimension' and not c.get('reference'));self.remove_constraint_button.setEnabled(c is not None);self.workspace.update()
 
     def begin_sketch_drag(self,ref,start):
@@ -303,7 +336,11 @@ def paint_constraints(w,p):
     def screen(point):return w.project_local([point],frame)[0]
     def line(a,b,color='#43a9c2',width=2):
         p.setPen(QPen(QColor(color),width));p.drawLine(QPointF(*a),QPointF(*b))
-    for ref in w.constraint_refs:
+    w.constraint_label_rects=[]
+    chosen=getattr(w,'selected_constraint',None)
+    selected=next((c for c in w.active.get('constraints',[]) if c.get('id')==chosen),None)
+    highlighted=list(w.constraint_refs)+[r for r in (selected or {}).get('refs',[]) if r not in w.constraint_refs]
+    for ref in highlighted:
         try:
             value=value_of(ref)
             if ref['kind']=='point':
@@ -335,5 +372,16 @@ def paint_constraints(w,p):
                 label=prefix+f'{c["value"]:g} '+('°' if c['mode']=='angle' else 'mm')
                 if c.get('reference'):label='('+label+')'
             else:label=symbols[c['kind']]
-            p.setPen(QColor(w.theme_color('#087ba5')));w.static_text(p,float(xy[0]+7),float(xy[1]-7),label)
+            # Every label is a clickable target: click selects it, Delete removes it (the
+            # geometry stays), double-click edits a dimension's value.
+            from PySide6.QtCore import QRectF
+            metrics=p.fontMetrics();x=float(xy[0]+7);y=float(xy[1]-7)
+            rect=QRectF(x-4,y-metrics.ascent()-2,metrics.horizontalAdvance(label)+8,metrics.height()+4)
+            active=c.get('id') is not None and c.get('id')==chosen
+            if c['kind']=='dimension' or active:
+                fill=QColor('#f0ad45') if active else QColor(w.theme_color('#eaf0f5'));fill.setAlpha(235 if active else 215)   # the canvas colour: readable in every theme
+                p.setPen(QPen(QColor('#b96c1a' if active else w.theme_color('#087ba5')),1.2));p.setBrush(fill)
+                p.drawRoundedRect(rect,4,4);p.setBrush(Qt.NoBrush)
+            p.setPen(QColor('#10151c') if active else QColor(w.theme_color('#087ba5')));w.static_text(p,x,y,label)
+            if c.get('id') is not None:w.constraint_label_rects.append((rect,c['id']))
         except (ValueError,KeyError,TypeError):continue

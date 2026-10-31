@@ -91,13 +91,20 @@ def prism_lines(feature, sources, sketches, frames):
         if abs(float(feature.get('taper', 0) or 0)) > 1e-12:
             return None
         direction = feature.get('direction', 'one side')
-        if direction not in ('one side', 'symmetric'):
+        if direction not in ('one side', 'symmetric', 'two sides'):
             return None
         depth = float(feature.get('depth', 10))
         offset = float(feature.get('offset', 0) or 0)
         if abs(depth) < 1e-9 or not math.isfinite(depth) or not math.isfinite(offset):
             return None
-        low, high = (offset - depth / 2, offset + depth / 2) if direction == 'symmetric' else (offset, offset + depth)
+        if direction == 'two sides':
+            # Side 2 runs the other way from side 1 (solid_tools.extrude: -n * |depth2| * sign).
+            second = abs(float(feature.get('depth2', depth)))
+            if second < 1e-9 or not math.isfinite(second):
+                return None
+            low, high = sorted((offset + depth, offset - second * (1 if depth > 0 else -1)))
+        else:
+            low, high = (offset - depth / 2, offset + depth / 2) if direction == 'symmetric' else (offset, offset + depth)
         tables = {}
         lines = []
         for source in sources:

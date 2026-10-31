@@ -414,7 +414,7 @@ class SolidUI:
                 self.spin(form,'head_diameter','Head diameter',f['head_diameter'],lambda value:f.update(head_diameter=value),True)
                 key='head_depth' if f['hole_type']=='counterbore' else 'head_angle';self.spin(form,key,'Head depth' if key=='head_depth' else 'Included angle',f[key],lambda value:f.update({key:value}),True)
             self.note('X and Y are coordinates on the supporting plane. A face support starts at its center; inward points into the body.')
-        if kind in ('revolve','sweep','loft'):self.combo(form,'operation','Operation',['add','cut','intersect'],f.get('operation','add'),lambda value:f.update(operation=value))
+        if kind in ('revolve','sweep','loft'):self.combo(form,'operation','Operation',['add','cut','intersect','new'],f.get('operation','add'),lambda value:f.update(operation=value))
         self.highlight_solid_faces()
         active=QCheckBox(tr('Active'));active.setChecked(f.get('enabled',True));active.toggled.connect(lambda on:self.parameter_changed(lambda value:f.update(enabled=value),on));form.addRow(active)
 

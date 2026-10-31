@@ -187,6 +187,11 @@ class Workspace(WorkspaceBase):
     measure_picked=Signal(dict)
     box_selected=Signal(dict)
     slot_picked=Signal(dict)
+    mode_changed=Signal(str)
+    command_requested=Signal(str)
+    constraint_selected=Signal(str)
+    constraint_delete_requested=Signal(str)
+    constraint_edit_requested=Signal(str)
     def __init__(self):
         super().__init__()
         self.gizmo=ViewportGizmo(self)
@@ -214,6 +219,7 @@ class Workspace(WorkspaceBase):
         self.faded_bodies=set();self.fade_key=None;self.fade_path=None
         self.camera_busy=False;self.camera_settle=QTimer(self);self.camera_settle.setSingleShot(True);self.camera_settle.setInterval(140)
         self.camera_settle.timeout.connect(self.settle_camera)
+        self.selected_constraint=None;self.constraint_label_rects=[]
         self.hover=None; self.selected_source=None; self.selected_entity=None;self.extrusion_selection=[];self.extrude_selecting=False;self.path_picking=False;self.path_hover=None
         self.dimension_locks={};self.dimension_index=0;self.dimension_text='';self.dimension_typing=False
         self.points=[];self.point_redo=[]; self.cursor=None; self.hover_position=None; self.snap_label=''; self.last=None; self.drag=False
@@ -395,6 +401,23 @@ class Workspace(WorkspaceBase):
             self.aligned=np.array(self.aligned,dtype=float)@np.array([[c,-s,0],[s,c,0],[0,0,1]])
         self.begin_camera_transition(start);self.update()
 
+    def rotate_view(self,degrees=90.):
+        """Turn the sketch view a quarter turn clockwise on screen about the screen centre, with a short glide.
+
+        Only the camera turns: the sketch, its plane and its coordinates stay as they are.
+        """
+        if self.mode!='sketch':return
+        self.flush_motion();self.finish_camera_animation();start=self.camera_state()
+        a=math.radians(degrees);c,s=math.cos(a),math.sin(a)
+        # Rows of the rotation are the screen right/up/towards-viewer axes; turning them about
+        # the viewing axis turns the picture on screen, and the pan offset turns with it so the
+        # point at the screen centre stays put.
+        turn=np.array([[c,s,0],[-s,c,0],[0,0,1]])
+        self.aligned=turn@np.array(self.rotation(),dtype=float)
+        px,py=float(self.pan[0]),float(self.pan[1])
+        self.pan=np.array([c*px-s*py,s*px+c*py])
+        self.begin_camera_transition(start);self.update()
+
     def align(self,frame,animate=True):
         self.flush_motion();self.finish_camera_animation()
         start=self.camera_state()
@@ -500,12 +523,12 @@ class Workspace(WorkspaceBase):
         self.mode=mode;self.active=active;self.active_frame=frame;self.pattern_selection.clear();self.pattern_stage='sources';self.pattern_axis=None;self.pattern_center=None
         self.text_box=None;self.path_picking=False;self.path_hover=None
         if mode!='edge':self.selected_edges.clear()
-        self.points=[];self.point_redo=[];self.cursor=None;self.hover=None;self.selected_entity=None;self.selected_source=None
+        self.points=[];self.point_redo=[];self.cursor=None;self.hover=None;self.selected_entity=None;self.selected_source=None;self.selected_constraint=None
         if mode=='sketch': self.construction_mode=False;self.align(frame,animate=False)
         elif self.aligned is not None: self.aligned=None
         self.begin_camera_transition(camera_start)
         self.setCursor(Qt.CrossCursor if mode in ('sketch','support','extrude','edge') else Qt.ArrowCursor)
-        self.update()
+        self.update();self.mode_changed.emit(mode)
     def set_extrusion_selection(self,hits,active=True):
         self.extrusion_selection=[dict(hit) for hit in (hits or [])]
         self.extrude_selecting=bool(active)
@@ -559,14 +582,23 @@ class Workspace(WorkspaceBase):
         if self.measure_active:
             if e.key()==Qt.Key_Escape:self.set_measure_active(False);self.tool_requested.emit(self.tool if self.mode=='sketch' else 'measure_exit')
             e.accept();return
+        # Fusion 360's default keys. F6 fits everything, Z zooms to the selection.
+        if not e.modifiers() and e.key()==Qt.Key_F6:self.fit();e.accept();return
         if self.mode!='sketch' and not self.measure_active and not e.modifiers():
             if e.key()==Qt.Key_Z:self.fit_selection();e.accept();return
-            if e.key()==Qt.Key_F:self.fit();e.accept();return
+            commands={Qt.Key_E:'extrude',Qt.Key_F:'fillet',Qt.Key_Q:'press_pull',Qt.Key_H:'hole',Qt.Key_M:'body_move'}
+            if e.key() in commands:self.command_requested.emit(commands[e.key()]);e.accept();return
         if self.mode=='sketch' and not e.modifiers() & (Qt.ControlModifier|Qt.AltModifier):
-            shortcuts={Qt.Key_L:'line',Qt.Key_R:'rectangle',Qt.Key_C:'circle',Qt.Key_A:'arc',Qt.Key_T:'trim',Qt.Key_V:'select',Qt.Key_E:'extend',Qt.Key_O:'offset'}
+            shortcuts={Qt.Key_L:'line',Qt.Key_R:'rectangle',Qt.Key_C:'circle',Qt.Key_A:'arc',Qt.Key_T:'trim',Qt.Key_V:'select',Qt.Key_O:'offset'}
             if e.key() in shortcuts:self.tool_requested.emit(shortcuts[e.key()]);e.accept();return
+            commands={Qt.Key_D:'dimension',Qt.Key_P:'project',Qt.Key_E:'extrude'}
+            if not self.points and e.key() in commands:self.command_requested.emit(commands[e.key()]);e.accept();return
             if not self.points and e.key()==Qt.Key_X:self.construction_requested.emit();e.accept();return
-            if not self.points and e.key()==Qt.Key_Delete:self.delete_requested.emit();e.accept();return
+            if not self.points and e.key()==Qt.Key_Delete:
+                # A selected dimension/constraint is removed on its own; the geometry stays.
+                if self.selected_constraint is not None:self.constraint_delete_requested.emit(self.selected_constraint)
+                else:self.delete_requested.emit()
+                e.accept();return
         if self.mode=='sketch' and self.tool=='spline' and e.key() in (Qt.Key_Return,Qt.Key_Enter):
             if len(self.points)>=2:
                 self.entity_created.emit(entity('spline',basis='bspline',points=[list(p) for p in self.points]));self.points=[];self.cursor=None;self.reset_dimensions();self.update()
@@ -1299,6 +1331,14 @@ class Workspace(WorkspaceBase):
                 index=self.entity_at(e.position());point=self.local_at(e.position(),self.active_frame)
                 if index is not None and point is not None:self.trim_requested.emit(index,point.tolist())
                 return
+            if self.tool=='select':
+                # Dimensions and constraint symbols are picked before the geometry under them.
+                label=self.constraint_label_at(e.position())
+                if label is not None:
+                    self.selected_constraint=label;self.selected_entity=None;self.sketch_drag_ref=None;self.sketch_drag_active=False
+                    self.constraint_selected.emit(label);self.update();return
+                if self.selected_constraint is not None:
+                    self.selected_constraint=None;self.constraint_selected.emit('')
             point=self.snap_at(e.position())
             if point is None:return
             if self.tool=='select':
@@ -1629,9 +1669,20 @@ class Workspace(WorkspaceBase):
         self.pending_zoom+=delta
         if not self.motion_timer.isActive():self.motion_timer.start()
         e.accept()
+    def constraint_label_at(self,position):
+        """Id of the dimension or constraint label under a screen position (see paint_constraints)."""
+        if self.mode!='sketch' or not self.active:return None
+        point=QPointF(position)
+        for rect,constraint_id in reversed(self.constraint_label_rects):
+            if rect.adjusted(-3,-3,3,3).contains(point):return constraint_id
+        return None
+
     def mouseDoubleClickEvent(self,e):
         if self.gizmo.hit(e.position()) is not None:
             self.gizmo.editor.setFocus();self.gizmo.editor.selectAll();return
+        if self.mode=='sketch' and self.tool=='select':
+            label=self.constraint_label_at(e.position())
+            if label is not None:self.constraint_edit_requested.emit(label);return
         if self.mode!='sketch':self.fit()
 
     def _circle_from_three(self,a,b,c):
@@ -1665,6 +1716,12 @@ class Workspace(WorkspaceBase):
         return a,mid,end
 
     def draw_point(self,p):
+        # Values typed into the live dimension boxes become driving dimensions of the new
+        # entity (as in Fusion); the window reads them when the entity arrives.
+        try:
+            dims=self.live_dimensions(self.points,self.cursor) if self.points else []
+            self.typed_dimensions={dims[i][0]:float(v) for i,v in self.dimension_locks.items() if 0<=i<len(dims)}
+        except Exception:self.typed_dimensions={}
         self.reset_dimensions()
         if self.tool=='text' and self.text_box is not None:
             # One text box at a time: its settings are in the right panel.

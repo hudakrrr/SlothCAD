@@ -170,18 +170,26 @@ HU.update({
 'Save this project before continuing?':'Mented a projektet a folytatás előtt?','Discard the current unapplied changes?':'Elveted az aktuális, még nem alkalmazott módosításokat?',
 })
 
-_shortcuts_en="""Click the workspace, then use:
-L — Line    R — Rectangle    C — Circle    A — Arc
-V — Select    T — Trim    X — Construction drawing
-Delete — Remove selected sketch geometry
+_shortcuts_en="""Click the workspace, then use (Fusion 360 keys):
+Sketch: L — Line    R — Rectangle    C — Circle    A — Arc    D — Dimension
+O — Offset    T — Trim    P — Project    X — Construction    V — Select
+E — Finish the sketch and extrude
+Delete — Remove the selected sketch geometry or dimension
+Model: E — Extrude    F — Fillet    Q — Press pull    H — Hole    M — Move/Copy
+I — Measure    F6 — Fit all    Z — Zoom to selection
+Ctrl+Z — Undo    Ctrl+Y / Ctrl+Shift+Z — Redo
 
 While drawing: type a dimension, Tab / Shift+Tab to switch fields, Enter to place, Esc to cancel.
 
 Guides snap like normal geometry but never create extrusion profiles. Symmetric extrusion uses total depth."""
-_shortcuts_hu="""Kattints a munkaterületre, majd használd:
-L — Vonal    R — Téglalap    C — Kör    A — Ív
-V — Kijelölés    T — Vágás    X — Segédgeometria
-Delete — Kijelölt vázlatgeometria törlése
+_shortcuts_hu="""Kattints a munkaterületre, majd használd (Fusion 360 billentyűk):
+Vázlat: L — Vonal    R — Téglalap    C — Kör    A — Ív    D — Méret
+O — Eltolás    T — Vágás    P — Vetítés    X — Segédgeometria    V — Kijelölés
+E — Vázlat befejezése és kihúzás
+Delete — A kijelölt vázlatgeometria vagy méret törlése
+Modell: E — Kihúzás    F — Lekerekítés    Q — Nyomás/húzás    H — Furat    M — Mozgatás/másolás
+I — Mérés    F6 — Teljes nézet    Z — Nagyítás a kijelölésre
+Ctrl+Z — Visszavonás    Ctrl+Y / Ctrl+Shift+Z — Újra
 
 Rajzolás közben: írj be méretet, Tab / Shift+Tab vált a mezők között, Enter elhelyez, Esc megszakít.
 
@@ -752,7 +760,7 @@ HU.update({k:v for k,v in {
     'Import IGES / mesh…':'IGES / hálómodell importálása…','Export drawing…':'Rajz exportálása…','Export 3MF…':'3MF exportálása…',
     'Export glTF (.glb)…':'glTF (.glb) exportálása…','Export options…':'Exportálási beállítások…','Insert part from file…':'Alkatrész beszúrása fájlból…',
     'Perspective view':'Perspektivikus nézet','Save current view…':'Aktuális nézet mentése…','Delete saved view…':'Mentett nézet törlése…',
-    'Camera orientation · saved views':'Kameranézet · mentett nézetek','Perspective camera (sketches always use the orthographic view)':'Perspektivikus kamera (a vázlatok mindig merőleges vetítésűek)',
+    'Camera orientation · saved views':'Kameranézet · mentett nézetek','Perspective camera (sketches always use the orthographic view)':'Perspektivikus kamera (a vázlatok mindig merőleges vetítésűek)','Turn view 90°':'Nézet forgatása 90°-kal','Turn the sketch view 90° clockwise (the sketch itself does not change)':'A vázlatnézet elforgatása 90°-kal az óramutató irányába (maga a vázlat nem változik)',
     'Section view: cut the model with a movable plane':'Metszeti nézet: a modell elmetszése mozgatható síkkal',
     'Fit all visible objects · Z: zoom to the selection':'Az összes látható objektum ráillesztése · Z: ráközelítés a kijelölésre',
     # parameters
@@ -809,7 +817,7 @@ HU.update({k:v for k,v in {
     # features
     'Thin wall':'Vékony fal','Wall position':'Fal helyzete','Inside the outline':'A körvonalon belül','Outside the outline':'A körvonalon kívül','Centered on the outline':'A körvonalra középre',
     'Extrude only a wall of the given thickness along the outline instead of the whole profile.':'Csak a megadott vastagságú falat húzza ki a körvonal mentén a teljes profil helyett.',
-    'Second distance':'Második távolság','two sides':'két oldal','Equal distance':'Egyenlő távolság','Two distances':'Két távolság','Distance and angle':'Távolság és szög',
+    'Second distance':'Második távolság','Side 1':'1. oldal','Side 2':'2. oldal','Dimension deleted; the sketch geometry is kept.':'Méret törölve; a vázlatgeometria megmaradt.','Constraint deleted; the sketch geometry is kept.':'Kényszer törölve; a vázlatgeometria megmaradt.','selected · Delete removes it (the sketch stays) · double-click edits the value':'kijelölve · Delete törli (a vázlat megmarad) · dupla kattintással módosítható az érték','selected · Delete removes it (the sketch stays)':'kijelölve · Delete törli (a vázlat megmarad)','Every body this feature could change is hidden. Show the body, or choose New body.':'Minden test, amelyet ez a művelet módosíthatna, rejtett. Jelenítsd meg a testet, vagy válaszd az Új test lehetőséget.','two sides':'két oldal','Equal distance':'Egyenlő távolság','Two distances':'Két távolság','Distance and angle':'Távolság és szög',
     'Constant radius':'Állandó sugár','Variable radius':'Változó sugár','End radius':'Végsugár','Swap the two faces':'A két lap felcserélése','Type':'Típus',
     'Choose inside, outside or centered for the wall.':'Válaszd a fal helyzetét: belül, kívül vagy középen.','Choose one side, two sides or symmetric extrusion.':'Válassz egyoldali, kétoldali vagy szimmetrikus kihúzást.',
     'Two-sided extrusion needs the distance extent.':'A kétoldali kihúzáshoz távolság-kiterjedés kell.','The second distance cannot be zero.':'A második távolság nem lehet nulla.',

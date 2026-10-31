@@ -76,8 +76,8 @@ class MeasureUiTests(unittest.TestCase):
         for p in ([0,0,0],[3,4,0],[8,1,0]):self.w.measure_picked(point(p))
         self.assertEqual(len(self.w.workspace.measure_selection),1);self.assertNotIn('distance',self.w.workspace.measure_result)
         QTest.keyClick(self.w.workspace,Qt.Key_Escape);self.assertFalse(self.w.workspace.measure_active);self.assertIs(self.w.draft,draft);self.assertEqual(self.w.workspace.mode,'sketch')
-        QTest.keyClick(self.w.workspace,Qt.Key_M);self.assertTrue(self.w.workspace.measure_active)
-        QTest.keyClick(self.w.workspace,Qt.Key_M);self.assertFalse(self.w.workspace.measure_active)
+        QTest.keyClick(self.w.workspace,Qt.Key_I);self.assertTrue(self.w.workspace.measure_active)
+        QTest.keyClick(self.w.workspace,Qt.Key_I);self.assertFalse(self.w.workspace.measure_active)
     def test_dimension_overlay_is_visible_and_tracks_camera(self):
         self.w.toggle_measure();w=self.w.workspace;self.w.measure_picked(point([0,0,0]));self.w.measure_picked(point([20,0,0]))
         def render():

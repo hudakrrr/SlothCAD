@@ -353,6 +353,11 @@ class SlotUI:
     def set_slot_value(self, slot, value, hit=None):
         f = self.draft
         self.confirmed_slots = getattr(self, 'confirmed_slots', set()) | {slot.key}
+        if slot.kind == 'bodies' and f.get('kind') == 'body_combine' and slot.key in ('targets', 'tools'):
+            # A body is either the target or a tool: picking it for one takes it out of the other.
+            other = 'tools' if slot.key == 'targets' else 'targets'
+            key = self.slot_item_key(slot, value)
+            f[other] = [item for item in f.get(other, []) if self.slot_item_key(slot, item) != key]
         if slot.kind == 'hole_site':
             f['plane'] = value['plane'];f['x'], f['y'] = value['x'], value['y'];f.pop('points_sketch', None)
             self.site_confirmed = f.get('id')

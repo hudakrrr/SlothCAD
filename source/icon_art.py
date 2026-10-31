@@ -292,6 +292,8 @@ ART['axes']=arrow(10,22,29,22,color='red',width=1.7,head=3)+arrow(10,22,10,3,col
 ART['fit']=path('M3 10V3H10M22 3H29V10M29 22V29H22M10 29H3V22',width=1.9)+block(16,16,9,9,7,.9,color='accent',width=1.3)
 # Perspective: a box whose far face is smaller, with the converging edges drawn.
 ART['perspective']=poly([(4,10),(22,10),(22,28),(4,28)],width=1.7)+poly([(11,5),(27,5),(27,21),(11,21)],width=1.3,color='muted')+''.join(line(a,b,c,d,color='accent',width=1.5) for a,b,c,d in ((4,10,11,5),(22,10,27,5),(22,28,27,21)))
+# Turn view: the sketch sheet with a quarter-turn clockwise arrow around it.
+ART['rotate_view']=rect(9,9,14,14,rx=1,color='sketch',width=1.6)+line(9,16,23,16,color='muted',width=1)+line(16,9,16,23,color='muted',width=1)+arc_arrow(16,16,12.5,-160,-20,color='accent',width=1.9,head=3)
 # Section: a block cut by a plane (amber) with the removed corner shown dashed.
 ART['section']=block(15,19,12,12,8,.9)+poly([(3,16),(18,6),(30,12),(15,22)],color='warm',fill='warm',opacity=.25,width=1.5)+line(6,26,26,26,color='red',width=1.2,dash='2 2')
 ART['extend']=line(4,22,20,22,color='sketch',width=2.2)+line(20,22,27,22,color='accent',width=2.2,dash='2 2')+line(27,8,27,28,width=1.8)+arrow(14,15,21,15,color='accent',width=1.6,head=2.6)

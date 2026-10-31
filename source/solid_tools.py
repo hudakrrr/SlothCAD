@@ -177,7 +177,7 @@ def thin_profiles(outer,inner,feature):
     return rings
 
 
-def extrude(source,feature,result,sketches,frames):
+def extrude(source,feature,result,sketches,frames,bounds_of=False):
     outer,inner,frame=profile(source,result,sketches,frames);o,u,v,n=axes(frame)
     depth=number(feature.get('depth',10),'Depth');offset=number(feature.get('offset',0),'Start offset')
     extent=feature.get('extent','distance');direction=feature.get('direction','one side');taper=number(feature.get('taper',0),'Taper angle')
@@ -187,7 +187,7 @@ def extrude(source,feature,result,sketches,frames):
     sign=1 if depth>0 else -1;start=o+n*offset;shift=tuple(n*offset)
     if offset:outer=outer.translate(shift);inner=[w.translate(shift) for w in inner]
     if extent=='through all':
-        projected=(body_corners(result)-start)@n;pad=max(1.,float(np.ptp(projected))*.05)
+        projected=(body_corners(result if bounds_of is False else bounds_of)-start)@n;pad=max(1.,float(np.ptp(projected))*.05)
         if direction!='symmetric' and float(np.max(projected*sign))<=1e-7:raise ModelError('The body lies behind the profile. Reverse the extrusion direction or choose symmetric.')
         depth=sign*(2*(float(np.max(np.abs(projected)))+pad) if direction=='symmetric' else float(np.max(projected*sign))+pad)
     elif extent=='to object':

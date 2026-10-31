@@ -1,8 +1,8 @@
-"""SlothCAD 0.15.5: main window, toolbars and feature editors."""
+"""SlothCAD 0.15.6: main window, toolbars and feature editors."""
 import copy
 import os
 import sys
-VERSION='0.15.5'
+VERSION='0.15.6'
 # The maximum fillet/chamfer size is searched by worker processes without blocking the window.
 LIMIT_ASYNC=os.environ.get('QT_QPA_PLATFORM','') not in ('offscreen','minimal') and os.environ.get('SLOTHCAD_SYNC_LIMITS','')!='1'
 DEFAULT_EXTRUDE_DEPTH=0.      # a new extrusion starts flat; the depth is set with the arrow or by typing
@@ -206,6 +206,9 @@ class ToolHelpFilter(QObject):
         if event.button()!=Qt.RightButton:return False
         widget=obj
         while widget is not None:
+            # Timeline features show the feature's icon but are not tools: their right-click
+            # is the history menu, never the tool description.
+            if isinstance(widget,TimelineButton):return False
             key=widget.property('_icon_name') or widget.property('_tool')
             if key and tool_help.help_for(key) is not None and hasattr(widget,'text'):
                 if kind==QEvent.MouseButtonPress:
@@ -314,7 +317,7 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         self.sketch_action_group.setFixedHeight(80);fixed_layout.setAlignment(self.sketch_action_group,Qt.AlignTop)
         self.sketch_mode_badge.hide();self.sketch_action_group.hide()
         fixed.setFixedHeight(88);top_layout.addWidget(fixed,0)
-        self.measure_action=QAction(icon('measure'),tr('Measure'),self);self.measure_action.setProperty('_icon_name','measure');self.measure_action.setShortcut('M');self.measure_action.triggered.connect(self.toggle_measure);self.addAction(self.measure_action);self.actions['Measure']=self.measure_action
+        self.measure_action=QAction(icon('measure'),tr('Measure'),self);self.measure_action.setProperty('_icon_name','measure');self.measure_action.setShortcut('I');self.measure_action.triggered.connect(self.toggle_measure);self.addAction(self.measure_action);self.actions['Measure']=self.measure_action
         self.measure_button.setToolTip(tr('Measure · M'))
         outer.addWidget(top);self.ribbon_container=top
         # The workspace spans the whole width; the browser (left) and the tool settings (right)
@@ -333,7 +336,7 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         self.objects.setFrameShape(QFrame.NoFrame);self.objects.viewport().setAutoFillBackground(False);hint.hide();self.objects.setToolTip(tr('Check to show · Double-click sketch to edit'))
         self.workspace=Workspace();self.workspace.support_picked.connect(self.support_picked)
         self.workspace.measure_picked.connect(self.measure_picked);self.workspace.box_selected.connect(self.box_selected);self.workspace.extrusion_picked.connect(self.extrusion_picked);self.workspace.entity_created.connect(self.add_entity)
-        self.workspace.tool_requested.connect(self.set_tool);self.workspace.construction_requested.connect(self.toggle_construction);self.workspace.delete_requested.connect(self.delete_entity);self.workspace.trim_requested.connect(self.trim_entity);self.workspace.corner_requested.connect(self.toggle_sketch_corner);self.workspace.entity_picked.connect(self.select_entity);self.workspace.pattern_selection_changed.connect(self.pattern_selection_changed);self.workspace.mirror_axis_picked.connect(self.set_mirror_axis);self.workspace.pattern_center_picked.connect(self.set_pattern_center);self.workspace.edge_selection_changed.connect(self.edge_selection_changed);self.workspace.message.connect(self.show_status)
+        self.workspace.tool_requested.connect(self.set_tool);self.workspace.command_requested.connect(self.shortcut_command);self.workspace.construction_requested.connect(self.toggle_construction);self.workspace.delete_requested.connect(self.delete_entity);self.workspace.trim_requested.connect(self.trim_entity);self.workspace.corner_requested.connect(self.toggle_sketch_corner);self.workspace.entity_picked.connect(self.select_entity);self.workspace.pattern_selection_changed.connect(self.pattern_selection_changed);self.workspace.mirror_axis_picked.connect(self.set_mirror_axis);self.workspace.pattern_center_picked.connect(self.set_pattern_center);self.workspace.edge_selection_changed.connect(self.edge_selection_changed);self.workspace.message.connect(self.show_status)
         self.init_slots();self.init_spacemouse();self.init_constraints();self.init_solid_tools();self.init_body_tools();self.init_projection();self.init_advanced_tools();self.init_assemblies();self.init_spatial()
         self.init_sessions()
         self.stack=QStackedWidget();self.stack.addWidget(self.workspace);self.stack.addWidget(self.welcome);outer.addWidget(self.stack,1)
@@ -344,17 +347,19 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         self.viewport_tools=QFrame(self.workspace);self.viewport_tools.setObjectName('viewportTools');controls=QHBoxLayout(self.viewport_tools);controls.setContentsMargins(6,4,6,4);controls.setSpacing(3)
         self.view_selector=QComboBox();self.view_selector.setSizeAdjustPolicy(QComboBox.AdjustToContents);self.view_selector.setToolTip(tr('Camera orientation · saved views'))
         self.populate_view_selector();self.view_selector.currentIndexChanged.connect(self.view_selected);controls.addWidget(self.view_selector)
-        for name,label in [('fit','Fit'),('perspective','Perspective view'),('section','Section view'),('grid','Grid'),('axes','Axes'),('aa','Smooth edges')]:
+        for name,label in [('fit','Fit'),('perspective','Perspective view'),('rotate_view','Turn view 90°'),('section','Section view'),('grid','Grid'),('axes','Axes'),('aa','Smooth edges')]:
             b=QToolButton();b.setProperty('_icon_name',name);b.setIcon(icon(name));b.setIconSize(QSize(22,22));b.setText(tr(label));b.setToolButtonStyle(Qt.ToolButtonIconOnly)
             tips={'aa':tr('Smooth edges · GPU supersampling (16× on small viewports, 4× otherwise); falls back to MSAA when needed'),'fit':tr('Fit all visible objects · Z: zoom to the selection'),
-                  'perspective':tr('Perspective camera (sketches always use the orthographic view)'),'section':tr('Section view: cut the model with a movable plane')}
+                  'perspective':tr('Perspective camera (sketches always use the orthographic view)'),'rotate_view':tr('Turn the sketch view 90° clockwise (the sketch itself does not change)'),'section':tr('Section view: cut the model with a movable plane')}
             b.setToolTip(tips.get(name,tr(label)+' '+tr('display')))
             if name=='fit':b.clicked.connect(lambda:self.workspace.fit())
             elif name=='perspective':b.setCheckable(True);b.setChecked(False);b.toggled.connect(self.set_perspective);setattr(self,name+'_button',b)
             elif name=='section':b.setCheckable(True);b.setChecked(False);b.toggled.connect(self.toggle_section);setattr(self,name+'_button',b)
+            elif name=='rotate_view':b.clicked.connect(lambda:self.workspace.rotate_view(90.));b.setVisible(False);self.rotate_view_button=b
             else:b.setCheckable(True);b.setChecked(True);b.toggled.connect(lambda v,k=name:self.viewport_setting(k,v));setattr(self,name+'_button',b)
             controls.addWidget(b)
         self.init_section()
+        self.workspace.mode_changed.connect(self.viewport_mode_changed)
         self.viewport_tools.adjustSize();self.workspace.resized.connect(self.position_viewport_tools)
         self.graphics_warning=QToolButton(self.workspace);self.graphics_warning.setObjectName('graphicsWarning')
         self.graphics_warning.setProperty('_icon_name','warning');self.graphics_warning.setIcon(icon('warning'));self.graphics_warning.setIconSize(QSize(24,24));self.graphics_warning.setFixedSize(34,34)
@@ -744,6 +749,11 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         self.viewport_tools.adjustSize();self.viewport_tools.move(max(8,self.workspace.width()-self.viewport_tools.width()-12),max(8,self.workspace.height()-self.viewport_tools.height()-12));self.viewport_tools.raise_()
         if hasattr(self,'graphics_warning'):
             self.graphics_warning.move(max(8,self.workspace.width()-46),max(8,self.workspace.height()-self.viewport_tools.height()-52));self.graphics_warning.raise_()
+    def viewport_mode_changed(self,mode):
+        # The turn button only means something on a flat sketch view.
+        sketching=mode=='sketch'
+        if self.rotate_view_button.isHidden()==sketching:
+            self.rotate_view_button.setVisible(sketching);self.position_viewport_tools()
     def update_graphics_warning(self):
         self.graphics_warning.setVisible(bool(self.workspace.gpu_error));self.position_viewport_tools()
     def show_graphics_issues(self):
@@ -1053,7 +1063,19 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         self.set_scene_responsive(self.visible_solid(),self.scene_sketches(),materials=self.body_materials());self.update_title()
     def object_clicked(self,item,column):
         data=item.data(0,Qt.UserRole)
+        if data and data['type']=='bodies' and self.pick_body_from_browser(int(data['id'])):return
         if data:self.show_status(item.text(0)+' · '+(tr('visible') if item.checkState(0)==Qt.Checked else tr('hidden')))
+    def pick_body_from_browser(self,index):
+        """While a tool waits for a body, clicking it in the browser picks it, also a body
+        enclosed by another one that cannot be clicked in the viewport."""
+        f=self.draft;slot_key=getattr(self,'active_slot',None)
+        if not f or self.draft_index is not None or slot_key is None or self.doc.solid is None:return False
+        slot=next((s for s in getattr(self,'current_slots',[]) if s.key==slot_key),None)
+        if slot is None or slot.kind!='bodies':return False
+        bodies=self.doc.solid.val().Solids()
+        if not 0<=index<len(bodies):return False
+        from references import body_reference
+        self.set_slot_value(slot,body_reference(bodies[index],index,len(bodies),self.doc.solid));return True
     def object_edit(self,item,column):
         data=item.data(0,Qt.UserRole)
         if data and data['type']=='sketches':
@@ -1094,6 +1116,7 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         self.edit_menu=QMenu(tr('Edit'),self.menu_bar);self.edit_menu.setProperty('_i18n_title','Edit');self.edit_menu_action=self.menu_bar.addMenu(self.edit_menu)
         self.undo_action=action(self.edit_menu,'Undo',self.undo,QKeySequence.Undo,'undo')
         self.redo_action=action(self.edit_menu,'Redo',self.redo,'Ctrl+Shift+Z','redo')
+        self.redo_action.setShortcuts([QKeySequence('Ctrl+Shift+Z'),QKeySequence('Ctrl+Y')])
         self.edit_menu.addSeparator()
         action(self.edit_menu,'Copy feature (with what it needs)',self.copy_features,'Ctrl+C')
         action(self.edit_menu,'Paste feature into this project',self.paste_features,'Ctrl+V')
@@ -1212,11 +1235,28 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
             f'SlothCAD {VERSION}\n\n'+tr('SlothCAD is free and open-source software, released under the GNU General Public License v3.0. You may use, study, change and share it; versions you share must stay under the same license.')
             +'\n\n'+tr('It is built on Qt for Python (LGPL), CadQuery (Apache-2.0) and OpenCASCADE (LGPL).'))
 
+    def shortcut_command(self,name):
+        """A Fusion 360 style key pressed in the viewport (see Workspace.keyPressEvent)."""
+        try:
+            if name=='extrude':
+                # In a sketch, E finishes it and starts the extrusion, as in Fusion.
+                if self.workspace.mode=='sketch' and not self.finish_sketch():return
+                self.start_extrude()
+            elif name=='fillet':self.new_edge('fillet')
+            elif name in ('press_pull','hole'):self.start_solid_tool(name)
+            elif name=='body_move':self.start_body_tool('body_move')
+            elif name=='dimension':self.start_constraint('dimension')
+            elif name=='project':self.start_projection()
+        except Exception as error:self.error(error)
     def show_shortcuts(self):
-        text=tr("""Click the workspace, then use:
-L — Line    R — Rectangle    C — Circle    A — Arc
-V — Select    T — Trim    X — Construction drawing
-Delete — Remove selected sketch geometry
+        text=tr("""Click the workspace, then use (Fusion 360 keys):
+Sketch: L — Line    R — Rectangle    C — Circle    A — Arc    D — Dimension
+O — Offset    T — Trim    P — Project    X — Construction    V — Select
+E — Finish the sketch and extrude
+Delete — Remove the selected sketch geometry or dimension
+Model: E — Extrude    F — Fillet    Q — Press pull    H — Hole    M — Move/Copy
+I — Measure    F6 — Fit all    Z — Zoom to selection
+Ctrl+Z — Undo    Ctrl+Y / Ctrl+Shift+Z — Redo
 
 While drawing: type a dimension, Tab / Shift+Tab to switch fields, Enter to place, Esc to cancel.
 
@@ -1495,7 +1535,7 @@ Face supports use geometric matching; ambiguous references stop rebuilding.""")
             else:features[self.draft_index]=draft
             solid,preview_sketches,preview_frames=self.run_busy('Building preview…',lambda report:self.doc.preview(features,progress=report))
             preview_items=[(s,preview_frames[id_]) for id_,s in preview_sketches.items()] if draft['kind']=='sketch_move' else []
-            self.set_scene_responsive(__import__('surface_tools').scene(solid,preview_frames),preview_items,materials=self.body_materials(),draft=True);self.workspace.construction_items=[(f['id'],f['name'],preview_frames[f['id']]) for f in features if f['kind'] in CONSTRUCTIONS and f['id'] in preview_frames];self.preview_active=True
+            self.set_scene_responsive(__import__('surface_tools').scene(self.visible_preview(solid),preview_frames),preview_items,materials=self.body_materials(),draft=True);self.workspace.construction_items=[(f['id'],f['name'],preview_frames[f['id']]) for f in features if f['kind'] in CONSTRUCTIONS and f['id'] in preview_frames];self.preview_active=True
             note=self.edge_fit_note(draft)
             self.preview_label.setText(tr('Preview only · Apply to keep this result')+(('\n'+note) if note else ''))
             self.show_status(note or 'Preview only. Orbit to inspect; Apply commits, Cancel restores the model.',15000 if note else 0)
@@ -1503,6 +1543,17 @@ Face supports use geometric matching; ambiguous references stop rebuilding.""")
             # While typing, a value that cannot be built is reported in the status bar, not in a dialog.
             if quiet:self.show_status(tr(str(e)),8000)
             else:self.error(e)
+    def visible_preview(self,solid):
+        """The preview result without the bodies hidden in the browser (they stay hidden while editing)."""
+        visibility=self.doc.display.get('bodies',{})
+        if solid is None or self.doc.solid is None or all(visibility.values()):return solid
+        from body_preferences import remap
+        try:
+            shown=remap(self.doc.solid,solid,dict(self.doc.display)).get('bodies',{})
+            bodies=[b for i,b in enumerate(solid.val().Solids()) if shown.get(str(i),True)]
+        except Exception:return solid
+        if not bodies:return None
+        return cq.Workplane('XY').newObject([bodies[0] if len(bodies)==1 else cq.Compound.makeCompound(bodies)])
     def evaluate_expression(self,text):
         """Value of an expression typed into a number box, using the project's parameters."""
         from expressions import evaluate_with_parameters
@@ -1650,9 +1701,32 @@ Face supports use geometric matching; ambiguous references stop rebuilding.""")
                     result,added=auto_constraints.apply(self.draft,ent)
                     if added:self.draft['entities']=result['entities'];self.draft['constraints']=result.get('constraints',[])
                 except Exception:pass
+            self.add_typed_dimensions(ent,getattr(self.workspace,'typed_dimensions',{}) or {})
+            self.workspace.typed_dimensions={}
             self.workspace.active=self.draft;self.workspace.update();self.show_editor()
         except Exception as e:self.error(e)
 
+    def add_typed_dimensions(self,ent,typed):
+        """Driving dimensions for the values typed while drawing ``ent``, as Fusion creates them.
+        Only typed values become dimensions; one that would over-constrain the sketch is skipped."""
+        if not typed:return
+        from constraints import new_constraint,add_constraint,line_ref,circle_ref
+        kind=ent.get('kind');wanted=[]
+        if kind=='line':
+            if 'Length' in typed:wanted.append(([line_ref(ent['id'])],'length',typed['Length']))
+            if 'Angle' in typed:wanted.append(([line_ref(ent['id'])],'angle',typed['Angle']))
+        elif kind=='rectangle':
+            if 'Width' in typed:wanted.append(([line_ref(ent['id'],0)],'length',typed['Width']))
+            if 'Height' in typed:wanted.append(([line_ref(ent['id'],1)],'length',typed['Height']))
+        elif kind=='circle' and 'Radius' in typed:
+            wanted.append(([circle_ref(ent['id'])],'diameter',2*typed['Radius']))
+        for refs,mode,value in wanted:
+            try:
+                c=new_constraint(self.draft,'dimension',refs,value,mode)
+                result=add_constraint(copy.deepcopy(self.draft),c)
+                self.draft['entities']=result['entities'];self.draft['constraints']=result.get('constraints',[])
+            except Exception:continue
+        self.workspace.sketch_cache.pop(self.draft.get('id'),None)
     def auto_constraints_enabled(self):
         try:return str(platform_support.settings().value('sketch/auto_constraints','true')).lower()!='false'
         except Exception:return True
@@ -1929,8 +2003,21 @@ Face supports use geometric matching; ambiguous references stop rebuilding.""")
         if not self.draft or self.draft.get('kind')!='extrude' or self.draft_index is not None:return
         self.extrude_hits=[];self.draft['sources']=[];self.draft.pop('source',None)
         self.workspace.set_extrusion_selection([],True);self.invalidate_preview();self.show_editor()
+    def hidden_body_references(self):
+        """References to the bodies unchecked in the browser: new features leave them alone."""
+        if self.doc.solid is None:return []
+        from references import body_reference
+        visibility=self.doc.display.get('bodies',{});bodies=self.doc.solid.val().Solids()
+        return [body_reference(b,i,len(bodies),self.doc.solid) for i,b in enumerate(bodies) if not visibility.get(str(i),True)]
     def resolved_feature(self,prompt=False):
         f=copy.deepcopy(self.draft)
+        if f and self.draft_index is None and f.get('kind') in ('extrude','hole','revolve','sweep','loft'):
+            # A new feature works as if hidden bodies were not there. The hidden set is captured
+            # with the feature (like Fusion's participating bodies), so later visibility changes
+            # do not change the model. Editing an existing feature keeps its stored set.
+            hidden=self.hidden_body_references()
+            if hidden:f['exclude_bodies']=hidden
+            else:f.pop('exclude_bodies',None)
         if not f or f.get('kind')!='extrude' or f.get('operation')!='auto':return f
         if self.doc.solid is None:f['operation']='add';return f
         intersects=False
@@ -1944,10 +2031,11 @@ Face supports use geometric matching; ambiguous references stop rebuilding.""")
         if not prompt:f['operation']='add';return f
         box=QMessageBox(self);box.setWindowTitle(tr('Extrusion crosses an existing body'))
         box.setText(tr('This extrusion intersects existing solid material. What should SlothCAD do?'))
-        join=box.addButton(tr('Join'),QMessageBox.AcceptRole);cut=box.addButton(tr('Cut'),QMessageBox.DestructiveRole);box.addButton(QMessageBox.Cancel)
+        join=box.addButton(tr('Join'),QMessageBox.AcceptRole);cut=box.addButton(tr('Cut'),QMessageBox.DestructiveRole);new=box.addButton(tr('New body'),QMessageBox.AcceptRole);box.addButton(QMessageBox.Cancel)
         box.exec()
         if box.clickedButton()==join:f['operation']='add'
         elif box.clickedButton()==cut:f['operation']='cut'
+        elif box.clickedButton()==new:f['operation']='new'
         else:return None
         return f
 
@@ -2444,7 +2532,7 @@ Face supports use geometric matching; ambiguous references stop rebuilding.""")
             def flip(on):
                 box=self.widgets['depth'];value=abs(box.value());box.setValue(-value if on else value)
             reverse.toggled.connect(flip);form.addRow(reverse);self.widgets['reverse']=reverse
-            self.combo(form,'operation','Operation',['auto','add','cut','intersect'],f.get('operation','add'),lambda v:f.update(operation=v))
+            self.combo(form,'operation','Operation',['auto','add','cut','intersect','new'],f.get('operation','add'),lambda v:f.update(operation=v))
             modern='source' in f or 'sources' in f
             if modern:
                 try:sources=extrusion_sources(f)

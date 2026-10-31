@@ -109,6 +109,72 @@ def _extrusion_boolean(base,tool,solids,operation):
     raise ModelError('The extrusion boolean did not produce a valid solid. Check the profile overlap and direction.')
 
 
+def _body_boolean(base,tool,solids,operation):
+    """An extrusion boolean applied body by body when the model has several bodies.
+
+    Separate bodies may overlap (New body, Combine with kept tools, imports). A boolean against
+    all of them as one compound makes the kernel split overlapping bodies against each other,
+    so a cut through one body also cut a body lying inside it into pieces. Here only bodies
+    whose bounds reach the tool take part, each on its own: a cut or intersect changes each of
+    them separately, a join merges the tool with the bodies it reaches. Others stay as they are.
+    """
+    bodies=list(base.val().Solids())
+    if len(bodies)<2:return _extrusion_boolean(base,tool,solids,operation)
+    shape=tool.val();box=shape.BoundingBox();gap=1e-6
+    def reaches(body):
+        b=body.BoundingBox()
+        return not (b.xmin>box.xmax+gap or b.xmax<box.xmin-gap or b.ymin>box.ymax+gap or b.ymax<box.ymin-gap or b.zmin>box.zmax+gap or b.zmax<box.zmin-gap)
+    reached=[reaches(b) for b in bodies];output=[]
+    def single(body):return cq.Workplane('XY').newObject([body])
+    if operation=='add':
+        touched=[b for b,r in zip(bodies,reached) if r]
+        merged=list(shape.Solids()) if not touched else list(_extrusion_boolean(single(touched[0]) if len(touched)==1 else cq.Workplane('XY').newObject([touched[0].fuse(*touched[1:])]),tool,solids,'add').val().Solids())
+        placed=False
+        for body,r in zip(bodies,reached):
+            if not r:output.append(body)
+            elif not placed:output.extend(merged);placed=True
+        if not placed:output.extend(merged)
+    else:
+        for body,r in zip(bodies,reached):
+            if not r:
+                if operation=='cut':output.append(body)
+                continue
+            try:pieces=_extrusion_boolean(single(body),tool,solids,operation).val().Solids()
+            except ModelError:
+                if operation=='intersect':continue      # no overlap with this body
+                raise
+            output.extend(pieces)
+    if not output:raise ModelError('The extrusion boolean did not produce a valid solid. Check the profile overlap and direction.')
+    return cq.Workplane('XY').newObject([output[0] if len(output)==1 else cq.Compound.makeCompound(output)])
+
+
+def _participating(result,references):
+    """``(base, kept)``: the bodies a feature works on, and the hidden bodies it leaves alone.
+
+    ``references`` are the bodies that were hidden when the feature was made. They are taken out
+    before the boolean (so a join does not merge into them, a cut does not cut them and
+    through-all ignores them) and put back unchanged afterwards. A reference that no longer
+    resolves (the body was removed or changed beyond recognition) simply excludes nothing.
+    """
+    if result is None or not references:return result,[]
+    from references import resolve_body
+    bodies=list(result.val().Solids());excluded=set()
+    for reference in references:
+        try:excluded.add(resolve_body(result,reference)[0])
+        except Exception:pass
+    if not excluded:return result,[]
+    rest=[b for i,b in enumerate(bodies) if i not in excluded]
+    base=cq.Workplane('XY').newObject([rest[0] if len(rest)==1 else cq.Compound.makeCompound(rest)]) if rest else None
+    return base,[b for i,b in enumerate(bodies) if i in excluded]
+
+
+def _with_bodies(result,extra):
+    """``result`` with the ``extra`` solids added as separate bodies."""
+    if not extra:return result
+    solids=(list(result.val().Solids()) if result is not None else [])+list(extra)
+    return cq.Workplane('XY').newObject([solids[0] if len(solids)==1 else cq.Compound.makeCompound(solids)])
+
+
 def _solid_count(shape):
     try:return len(shape.Solids())
     except Exception:return 0
@@ -565,7 +631,9 @@ def _build_state(features,progress=None,start_state=None,start_index=0,capture=N
             elif kind=='extrude' and 'source' not in f and 'sources' not in f:
                 tool=profile_solid(f);solids=tool.vals()
             elif kind=='extrude':
-                solids=[extrude(source,f,result,sketches,frames) for source in extrusion_sources(f)]
+                # Through-all measures only the bodies the extrusion may change (not hidden ones).
+                visible=_participating(result,f.get('exclude_bodies'))[0] if f.get('extent')=='through all' and f.get('operation')!='new' else result
+                solids=[extrude(source,f,result,sketches,frames,bounds_of=visible) for source in extrusion_sources(f)]
                 tool=cq.Workplane('XY').newObject([solids[0] if len(solids)==1 else cq.Compound.makeCompound(solids)])
             elif kind in BODY_TOOLS:
                 shape=body_operation(f,result,sketches,frames);result=cq.Workplane('XY').newObject([shape]);tool=None
@@ -608,16 +676,26 @@ def _build_state(features,progress=None,start_state=None,start_index=0,capture=N
                 # Preserve version-3 files where signed negative depth implicitly meant Cut.
                 # New UI-created extrusions set signed_depth=False and choose operation explicitly.
                 if f.get('signed_depth',False) and number(f['depth'],'Depth')<0:operation='cut'
-                if operation not in ('add','cut','intersect'): raise ModelError('Unknown operation.')
-                if result is None:
-                    if operation!='add': raise ModelError('A negative extrusion needs an existing body.' if f.get('signed_depth') and f['depth']<0 else 'The first solid feature must add material.')
-                    result=tool
-                elif operation=='add': result=_extrusion_boolean(result,tool,solids,operation)
-                elif operation=='cut':
-                    if f.get('signed_depth',False) and result.intersect(tool).val().Volume()<=1e-9:
-                        raise ModelError('The cut does not intersect a body. Check its direction, start offset and depth.')
-                    result=_extrusion_boolean(result,tool,solids,operation)
-                else: result=_extrusion_boolean(result,tool,solids,operation)
+                if operation not in ('add','cut','intersect','new'): raise ModelError('Unknown operation.')
+                if operation=='new':
+                    # New body: the tool is kept as separate bodies; nothing existing is touched.
+                    result=_with_bodies(result,list(tool.val().Solids()))
+                else:
+                    had_bodies=result is not None
+                    # Bodies hidden when the feature was made take no part in it.
+                    result,kept=_participating(result,f.get('exclude_bodies'))
+                    if result is None:
+                        if operation!='add':
+                            if had_bodies:raise ModelError('Every body this feature could change is hidden. Show the body, or choose New body.')
+                            raise ModelError('A negative extrusion needs an existing body.' if f.get('signed_depth') and f['depth']<0 else 'The first solid feature must add material.')
+                        result=tool
+                    elif operation=='add': result=_body_boolean(result,tool,solids,operation)
+                    elif operation=='cut':
+                        if f.get('signed_depth',False) and result.intersect(tool).val().Volume()<=1e-9:
+                            raise ModelError('The cut does not intersect a body. Check its direction, start offset and depth.')
+                        result=_body_boolean(result,tool,solids,operation)
+                    else: result=_body_boolean(result,tool,solids,operation)
+                    if result is not None and result.val() is not None:result=_with_bodies(result,kept)
                 if result is None or result.val() is None or not _edge_trial_is_valid(result):
                     raise ModelError('The extrusion operation did not produce a valid solid. Check its direction, overlap and selected profiles.')
             from topology import register

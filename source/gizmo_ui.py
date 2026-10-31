@@ -461,7 +461,7 @@ class GizmoUI:
         if f['kind']=='extrude' and (not ('sources' in f or 'source' in f) or f.get('extent','distance')!='distance'):
             w.gizmo.clear();return
         # Translation/depth/size updates reuse sampled geometry, never rerun the kernel.
-        changing={'dx','dy','dz','depth','name','enabled','operation','signed_depth'} if value_spec is None else {'name','enabled','auto_fit',value_spec[0]}
+        changing={'dx','dy','dz','depth','depth2','name','enabled','operation','signed_depth'} if value_spec is None else {'name','enabled','auto_fit',value_spec[0]}
         geometry_key=(id(self.doc),self.doc.revision,self.draft_index,f['kind'],
                       json.dumps({k:v for k,v in f.items() if k not in changing},sort_keys=True,default=str))
         try:
@@ -554,13 +554,30 @@ class GizmoUI:
             flip=-1. if (not move and f.get('operation')=='cut' and f.get('direction')!='symmetric'
                          and getattr(self,'gizmo_normal_outward',False)) else 1.
             values=[f.get(k,0.) for k in ('dx','dy','dz')] if move else [f.get('depth',0.)*flip]
+            directions=np.eye(3) if move else [np.asarray(direction,float)*flip]
+            two_sided=not move and f.get('direction')=='two sides'
+            if two_sided:
+                # Two arrows pointing away from each other: side 1 along the depth, side 2 the
+                # other way (solid_tools.extrude builds it along -n*|depth2|*sign(depth)).
+                depth=float(f.get('depth',0.) or 0.);second=abs(float(f.get('depth2',depth) or 0.))
+                directions=[np.asarray(direction,float)*flip,-np.asarray(direction,float)*(1. if depth>=0 else -1.)]
+                values=[depth*flip,second]
             def setter(axis,value):
+                if two_sided and axis==1:
+                    # The second distance is a length away from the first side; dragging past the
+                    # profile stops just short of zero instead of flipping it.
+                    value=max(abs(value),1e-3) if value>0 else 1e-3
+                    widget=self.widgets.get('depth2')
+                    if widget is not None:widget.setValue(value)
+                    else:self.parameter_changed(lambda v:f.update(depth2=v),value)
+                    return
                 key=('dx','dy','dz')[axis] if move else 'depth'
                 value=value*flip if not move else value
                 widget=self.widgets.get(key)
                 if widget is not None:widget.setValue(value)
                 else:self.parameter_changed(lambda v:f.update({key:v}),value)
-            w.gizmo.configure((f['id'],self.draft_index,flip),'move' if move else 'extrude',center,np.eye(3) if move else [np.asarray(direction,float)*flip],values,paths,setter,f.get('direction')=='symmetric',f.get('taper',0),
+            w.gizmo.configure((f['id'],self.draft_index,flip,two_sided),'move' if move else 'extrude',center,directions,values,paths,setter,f.get('direction')=='symmetric',f.get('taper',0),
+                              labels=['Side 1','Side 2'] if two_sided else None,
                               exact=self.exact_feature_outlines if not move else None,exact_key=self.exact_state_key() if not move else None,
                               exact_job=self.exact_feature_job if not move else None)
         except Exception as error:

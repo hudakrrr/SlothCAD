@@ -173,7 +173,8 @@ class ViewportGizmo:
         self.editor.setRange(-100000 if lo is None else float(lo),100000 if hi is None else float(hi))
         self.editor.setValue(float(self.state['values'][self.axis]));self.editor.blockSignals(False)
         kind=self.state['kind']
-        if kind=='spacing':label=tr(self.state['labels'][self.axis]) if self.state.get('labels') else 'XYZ'[self.axis]
+        if kind in ('spacing','extrude') and self.state.get('labels'):label=tr(self.state['labels'][self.axis])
+        elif kind=='spacing':label='XYZ'[self.axis]
         else:label='XYZ'[self.axis] if kind=='move' else tr(self.state['label'])
         color=COLORS[self.axis] if kind in ('move','spacing') else '#f0ad45'
         self.editor.setPrefix(label+': ');self.editor.setToolTip(tr('Type a distance in mm; Tab switches axes. Apply keeps the change.'))
@@ -199,7 +200,8 @@ class ViewportGizmo:
                 value=float(s['values'][axis]);length=max(48.,min(240.,abs(value)*np.linalg.norm(unit)))
                 if value<0:visual=-visual
             elif s['kind'] in ('extrude','value'):
-                value=s['values'][0]*(.5 if s['symmetric'] else 1)
+                # A two-sided extrusion has one arrow per side, each with its own distance.
+                value=s['values'][axis if s['kind']=='extrude' and len(s['values'])>1 else 0]*(.5 if s['symmetric'] else 1)
                 length=max(64.,min(240.,abs(value)*np.linalg.norm(unit)))
                 if value<0:visual=-visual
             tip=base+visual*length
@@ -311,6 +313,13 @@ class ViewportGizmo:
                     if s['kind'] in ('extrude','value') and isinstance(points,dict):offset=np.asarray(points['normal'])*s['values'][0]
                     if s['kind']=='value' and not s['offset_paths']:offset=offset*0
                     ends=[base+offset] if s['kind']=='move' else [base+offset*factor]+([base-offset*factor] if s['symmetric'] else [])
+                    if s['kind']=='extrude' and len(s['values'])>1:
+                        # Two sides: the second end lies along the second arrow.
+                        # Each profile keeps its own normal; the second arrow says which way along it.
+                        second=s['directions'][1]
+                        if isinstance(points,dict):
+                            normal=np.asarray(points['normal'],float);second=normal*np.sign(second@normal)
+                        ends.append(base+second*abs(float(s['values'][1])))
                     for end in ends:
                         arrays.append(end)
                         if s['kind']=='extrude' or s['kind']=='value' and s['offset_paths']:
@@ -361,15 +370,18 @@ class ViewportGizmo:
         handles=self.handles()
         for axis,(base,tip,unit) in enumerate(handles):
             accent=QColor(COLORS[axis] if s['kind'] in ('move','spacing') else '#f0ad45')
-            if s['kind']=='spacing':label=tr(s['labels'][axis]) if s.get('labels') else 'XYZ'[axis]
+            if s['kind'] in ('spacing','extrude') and s.get('labels'):label=tr(s['labels'][axis])
+            elif s['kind']=='spacing':label='XYZ'[axis]
             else:label='XYZ'[axis] if s['kind']=='move' else tr(s['label'])
             self.draw_arrow(p,base,tip,accent,axis==self.axis,self.dragging and axis==self.axis,label)
         if not handles:
             p.restore();return
         self.draw_anchor(p,handles[0][0],QColor(COLORS[self.axis] if s['kind'] in ('move','spacing') else '#f0ad45'))
         format_value=lambda value:f'{value:+.4f}'.rstrip('0').rstrip('.')
-        if s['kind']=='spacing':names=[tr(n) for n in (s.get('labels') or 'XYZ')]
-        if s['kind']=='spacing':values='   '.join(f'{names[i]}: {format_value(v)} mm' for i,v in enumerate(s['values']))
+        if s['kind'] in ('spacing','extrude') and s.get('labels'):names=[tr(n) for n in s['labels']]
+        elif s['kind']=='spacing':names=[tr(n) for n in 'XYZ']
+        if s['kind']=='extrude' and s.get('labels'):values='   '.join(f'{names[i]}: {format_value(v)} mm' for i,v in enumerate(s['values']))
+        elif s['kind']=='spacing':values='   '.join(f'{names[i]}: {format_value(v)} mm' for i,v in enumerate(s['values']))
         else:values='   '.join(f'{"XYZ"[i]}: {format_value(v)} mm' for i,v in enumerate(s['values'])) if s['kind']=='move' else f'{tr(s["label"])}: {format_value(s["values"][0])} mm'
         top=(s.get('limits') or (None,None))[1]
         if top is not None and s['kind']!='preview':values+='   ·   '+tr('max')+' '+format_value(top).lstrip('+')+' mm'
