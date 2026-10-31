@@ -1,8 +1,8 @@
-"""SlothCAD 0.15.2: main window, toolbars and feature editors."""
+"""SlothCAD 0.15.3: main window, toolbars and feature editors."""
 import copy
 import os
 import sys
-VERSION='0.15.2'
+VERSION='0.15.3'
 # The maximum fillet/chamfer size is searched by worker processes without blocking the window.
 LIMIT_ASYNC=os.environ.get('QT_QPA_PLATFORM','') not in ('offscreen','minimal') and os.environ.get('SLOTHCAD_SYNC_LIMITS','')!='1'
 DEFAULT_EXTRUDE_DEPTH=0.      # a new extrusion starts flat; the depth is set with the arrow or by typing
@@ -53,6 +53,18 @@ from trim import trim_entities
 from measure import calculate_measurement
 splash.step('Loading CAD kernel…')
 import cadquery as cq
+
+
+class _BusySignals(QObject):
+    """Carries progress of a ``run_busy`` job from its worker thread to the interface thread.
+
+    Each signal is connected straight to a C++ slot (QLabel.setText, QProgressBar.setRange /
+    setValue, QEventLoop.quit), so delivering it runs no Python on the interface thread.
+    """
+    text=Signal(str)
+    bounds=Signal(int,int)
+    value=Signal(int)
+    finished=Signal()
 
 
 class _LimitSignals(QObject):
@@ -364,47 +376,91 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         self.busy_label=QLabel('');self.busy_label.setObjectName('subtle');self.busy_label.hide()
         self.busy_progress=QProgressBar();self.busy_progress.setTextVisible(False);self.busy_progress.setFixedWidth(220);self.busy_progress.setFixedHeight(12);self.busy_progress.hide()
         self.statusBar().addPermanentWidget(self.busy_label);self.statusBar().addPermanentWidget(self.busy_progress)
+        self.busy_signals=_BusySignals(self);self.busy_signals.text.connect(self.busy_label.setText)
+        self.busy_signals.bounds.connect(self.busy_progress.setRange);self.busy_signals.value.connect(self.busy_progress.setValue)
+        # One event loop for every busy job, connected once. A per-job local loop crashed: a
+        # finished signal still queued when the job returned was later delivered to the deleted loop.
+        # A stale quit reaching this loop is harmless (run_busy re-enters it until its job is done).
+        self.busy_loop=QEventLoop(self);self.busy_signals.finished.connect(self.busy_loop.quit)
         self.refresh(fit=True);self.workspace.set_mode('support');self.show_editor();localize_tree(self.centralWidget());self.autosave=Autosave(self)
         self.escape_filter=EscapeFilter(self);QApplication.instance().installEventFilter(self.escape_filter)
         self.help_filter=ToolHelpFilter(self);QApplication.instance().installEventFilter(self.help_filter)
         if start_with_project:self.register_session()
         else:self.show_welcome()
         self.fit_ribbon_buttons();QTimer.singleShot(0,self.fit_ribbon_buttons)
+        # Load the CAD kernel in the background process used for exports and analysis ahead of time.
+        from kernel_process import KERNEL;QTimer.singleShot(4000,KERNEL.warm_up)
 
     def show_status(self,text,*args):
         self.statusBar().showMessage(tr(text),*args)
 
     def run_busy(self,label,operation):
-        """Run CAD/OCC work off the GUI thread while Qt keeps servicing Fedora's event loop."""
+        """Run CAD/OCC work off the GUI thread without ever freezing the window.
+
+        The CAD kernel keeps Python's GIL for the whole of a kernel call, which can last
+        seconds. Any Python the interface thread wants to run meanwhile (a paint event, an
+        event filter, this function's own polling loop) has to wait for that call to end, and
+        if that adds up to a few seconds the desktop reports the window as not responding.
+        So after a short grace period the interface thread waits in a plain Qt event loop:
+        progress arrives as signals wired to C++ slots, the worker ends the loop with a signal,
+        the viewport (painted in Python) keeps its last frame and the application-wide Python
+        event filters are paused. Window-manager pings, the status bar and the progress bar
+        are all handled in C++ and keep working however long a single kernel call takes.
+        """
         if self.loading:
             return operation(lambda *_:None)
-        self.loading=True;central=self.centralWidget()
-        state={'done':0,'total':0,'text':label,'finished':False,'result':None,'error':None}
-        # Most jobs take a few milliseconds; greying out and re-enabling the whole widget tree
-        # costs ~20 ms each time, so the busy state is only shown for jobs that really last.
-        started=time.monotonic();shown=False
+        self.loading=True;central=self.centralWidget();signals=self.busy_signals
+        state={'done':0,'total':0,'text':label,'finished':False,'result':None,'error':None,'shown':False,'sent':(None,None,None),'sent_at':0.}
+        def publish(force=False):
+            # Runs on the worker thread; only changes are sent, at most ~30 times a second.
+            total=state['total'];done=state['done'];text=tr(state['text'])
+            bounds=(0,total) if total>1 else (0,0);value=max(0,min(total,done)) if total>1 else 0
+            now=time.monotonic()
+            if not force and now-state['sent_at']<.033:return
+            last_text,last_bounds,last_value=state['sent']
+            if text!=last_text:signals.text.emit(text)
+            if bounds!=last_bounds:signals.bounds.emit(*bounds)
+            if value!=last_value:signals.value.emit(value)
+            state['sent']=(text,bounds,value);state['sent_at']=now
         def report(done,total,text=''):
             state['done']=int(done);state['total']=max(0,int(total));state['text']=text or label
+            if state['shown']:publish()
         def worker():
             try:
                 from mesh_cache import KERNEL_LOCK
                 with KERNEL_LOCK:state['result']=operation(report)
             except BaseException as err:state['error']=err
-            finally:state['finished']=True
-        thread=threading.Thread(target=worker,name='SlothCAD-CAD-worker',daemon=True);thread.start()
-        while thread.is_alive():
-            if not shown and time.monotonic()-started>.15:
-                shown=True;central.setEnabled(False);self.setCursor(Qt.WaitCursor)
-                self.busy_label.setText(tr(label));self.busy_label.show();self.busy_progress.setRange(0,0);self.busy_progress.show()
-            if shown:
-                total=state['total'];done=state['done'];self.busy_label.setText(tr(state['text']))
-                if total>1:
-                    self.busy_progress.setRange(0,total);self.busy_progress.setValue(max(0,min(total,done)))
-                else:self.busy_progress.setRange(0,0)
-            QApplication.processEvents(QEventLoop.ExcludeUserInputEvents,50);thread.join(.02)
-        thread.join();QApplication.processEvents(QEventLoop.ExcludeUserInputEvents,50)
-        if shown:self.busy_progress.hide();self.busy_label.hide();central.setEnabled(True);self.unsetCursor()
-        self.loading=False
+            finally:
+                state['finished']=True
+                try:signals.finished.emit()
+                except RuntimeError:pass       # window already destroyed
+        loop=self.busy_loop
+        thread=threading.Thread(target=worker,name='SlothCAD-CAD-worker',daemon=True)
+        # Most jobs take a few milliseconds; greying out and re-enabling the whole widget tree
+        # costs ~20 ms each time, so the busy state is only shown for jobs that really last.
+        started=time.monotonic();thread.start()
+        while not state['finished'] and time.monotonic()-started<.15:
+            QApplication.processEvents(QEventLoop.ExcludeUserInputEvents,20);thread.join(.01)
+        paused=[]
+        try:
+            if not state['finished']:
+                application=QApplication.instance()
+                for name in ('escape_filter','help_filter'):
+                    watcher=getattr(self,name,None)
+                    if watcher is not None:application.removeEventFilter(watcher);paused.append(watcher)
+                central.setUpdatesEnabled(False);central.setEnabled(False);self.setCursor(Qt.WaitCursor)
+                self.busy_label.setText(tr(label));self.busy_progress.setRange(0,0);self.busy_label.show();self.busy_progress.show()
+                state['shown']=True;publish(True)
+                # Safety net in case the finished signal were ever lost: a rare check, not polling.
+                guard=QTimer();guard.setInterval(1000);guard.timeout.connect(lambda:state['finished'] and loop.quit());guard.start()
+                while not state['finished']:loop.exec(QEventLoop.ExcludeUserInputEvents)
+                guard.stop()
+            thread.join()
+        finally:
+            if state['shown']:
+                self.busy_progress.hide();self.busy_label.hide();central.setEnabled(True);central.setUpdatesEnabled(True);self.unsetCursor()
+            for watcher in paused:QApplication.instance().installEventFilter(watcher)
+            self.loading=False
         if state['error'] is not None:raise state['error']
         return state['result']
 
@@ -439,19 +495,28 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         finally:w.preparing_sketches=False
         self.install_sketch_data(data)
 
-    def set_scene_responsive(self,solid,sketches,fit=False,materials=None,draft=False):
-        """Show ``solid``; ``draft`` uses the coarse live-preview mesh (the final mesh replaces it later)."""
+    def set_scene_responsive(self,solid,sketches,fit=False,materials=None,draft=False,volume_of=None):
+        """Show ``solid``; ``draft`` uses the coarse live-preview mesh (the final mesh replaces it later).
+
+        ``volume_of``: a CadQuery workplane whose volume is also computed in the background job and
+        returned (a kernel call that takes long for big imported meshes, so never on this thread)."""
         materials=self.body_materials() if materials is None else materials
         needs_mesh=not self.workspace.geometry_matches(solid,draft)
         snapshots=[copy.deepcopy(sketch) for sketch,frame in sketches if not frame.get("spatial")]
         profiles=self.workspace.mode=='extrude' or self.workspace.extrude_selecting
+        cached=getattr(self,'_volume_cache',(None,0.))
         def prepare(report):
             mesh=prepare_scene_mesh(solid,report,draft) if needs_mesh else None
-            return mesh,self.prepare_sketch_data(snapshots,report,profiles)
+            volume=None
+            if volume_of is not None:
+                volume=cached[1] if cached[0] is volume_of else volume_of.val().Volume()
+            return mesh,self.prepare_sketch_data(snapshots,report,profiles),volume
         self.workspace.preparing_sketches=True
-        try:mesh,data=self.run_busy('Preparing viewport…',prepare)
+        try:mesh,data,volume=self.run_busy('Preparing viewport…',prepare)
         finally:self.workspace.preparing_sketches=False
+        if volume_of is not None:self._volume_cache=(volume_of,volume)
         self.workspace.set_scene(solid,sketches,fit,materials=materials,prepared=mesh,draft=draft);self.install_sketch_data(data)
+        return volume
 
     def mode_badge(self,caption,text):
         frame=QFrame();frame.setObjectName('modeBadgeFrame')
@@ -1007,7 +1072,7 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         """
         self.menu_bar=self.menuBar();self.menuBar().setNativeMenuBar(False);self.actions={}
         def action(menu,name,fn,key=None,icon_name=None):
-            icon_name=icon_name or {'New':'new','Open':'open','Save':'save','Save as':'save','Import STEP…':'import_step','Import DXF…':'import_dxf','Export STEP…':'export_step','Export STL…':'export_stl','Export DXF…':'export_dxf','Recover autosave…':'repair','Appearance…':'settings','Default body appearance…':'settings','Graphics diagnostics':'warning','Sketch shortcuts…':'help','Controls / scope':'help'}.get(name)
+            icon_name=icon_name or {'New':'new','Open':'open','Save':'save','Save as':'save','Import…':'import_step','Export…':'export_step','Recover autosave…':'repair','Appearance…':'settings','Default body appearance…':'settings','Graphics diagnostics':'warning','Sketch shortcuts…':'help','Controls / scope':'help'}.get(name)
             a=QAction(icon(icon_name),tr(name),self) if icon_name else QAction(tr(name),self)
             if icon_name:a.setProperty('_icon_name',icon_name)
             a.setProperty('_i18n_text',name)
@@ -1022,16 +1087,9 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         action(self.file_menu,'Open',self.open,QKeySequence.Open)
         action(self.file_menu,'Save',self.save,QKeySequence.Save)
         action(self.file_menu,'Save as',lambda:self.save(True),'Ctrl+Shift+S')
-        self.file_menu.addSeparator();action(self.file_menu,'Import STEP…',self.import_step_file)
-        action(self.file_menu,'Import DXF…',self.import_dxf_file)
-        action(self.file_menu,'Import IGES / mesh…',self.import_model_file)
-        action(self.file_menu,'Export DXF…',self.export_dxf_file)
-        action(self.file_menu,'Export drawing…',self.export_drawing_file)
-        action(self.file_menu,'Recover autosave…',self.recover_autosave)
-        self.file_menu.addSeparator();action(self.file_menu,'Export STEP…',self.export_step,'Ctrl+E')
-        action(self.file_menu,'Export STL…',self.export_stl,'Ctrl+Shift+E')
-        action(self.file_menu,'Export 3MF…',lambda:self.export_format('3mf'))
-        action(self.file_menu,'Export glTF (.glb)…',lambda:self.export_format('glb'))
+        self.file_menu.addSeparator();action(self.file_menu,'Import…',self.import_file,'Ctrl+I')
+        action(self.file_menu,'Export…',self.export_file,'Ctrl+E')
+        self.file_menu.addSeparator();action(self.file_menu,'Recover autosave…',self.recover_autosave)
         self.file_menu.addSeparator();action(self.file_menu,'Example part',self.example)
         self.edit_menu=QMenu(tr('Edit'),self.menu_bar);self.edit_menu.setProperty('_i18n_title','Edit');self.edit_menu_action=self.menu_bar.addMenu(self.edit_menu)
         self.undo_action=action(self.edit_menu,'Undo',self.undo,QKeySequence.Undo,'undo')
@@ -1498,9 +1556,9 @@ Face supports use geometric matching; ambiguous references stop rebuilding.""")
         set_default_parameters(self.doc.parameters)       # interface-side sketch solves use this project's table
         if self.selected is not None and self.selected>=len(self.doc.features):self.selected=None
         self.workspace.construction_items=[(f['id'],f['name'],self.doc.frames[f['id']]) for f in self.doc.features if f['kind'] in CONSTRUCTIONS and f['id'] in self.doc.frames and self.doc.display.get('construction',{}).get(f['id'],True)]
-        self.set_scene_responsive(self.visible_solid(),self.scene_sketches(),fit,materials=self.body_materials())
+        volume=self.set_scene_responsive(self.visible_solid(),self.scene_sketches(),fit,materials=self.body_materials(),volume_of=self.doc.solid)
         self.rebuild_objects();self.rebuild_timeline();self.sync_view_settings();self.show_editor();self.update_title()
-        volume=self.doc.solid.val().Volume() if self.doc.solid else 0
+        volume=volume or 0
         self.show_status(f'{len(self.doc.features)} features · Volume {volume:,.3f} mm³ · all dimensions in mm')
     def update_title(self):
         if getattr(self,'session_id',None) is None and getattr(self,'sessions',None) is not None and not self.sessions:
@@ -2569,7 +2627,15 @@ Face supports use geometric matching; ambiguous references stop rebuilding.""")
         if Path(filename).suffix.lower() not in suffixes:filename+='.'+suffix
         tolerance,angular,visible_only=self.export_preferences()
         try:
-            self.run_busy('Exporting '+suffix.upper()+'…',lambda report:self.doc.export(filename,visible_only=visible_only,tolerance=tolerance,angular_tolerance=angular));self.show_status(f'Exported {filename}')
+            from exchange import export_kind
+            from kernel_process import KERNEL,item_bytes
+            export_kind(filename,tolerance,angular)
+            # Writing the file runs in the kernel process: a long kernel call there cannot freeze the window.
+            def work(report):
+                report(0,0,'Preparing export…')
+                items=item_bytes(self.doc.export_items(visible_only))
+                KERNEL.call('export',dict(items=items,path=str(filename),label=suffix.upper(),tolerance=tolerance,angular_tolerance=angular),report)
+            self.run_busy('Exporting '+suffix.upper()+'…',work);self.show_status(f'Exported {filename}')
         except Exception as e:self.error(e)
     def example(self):
         try:

@@ -10,6 +10,20 @@ from legacy_model import ModelError
 MESH_TRIANGLE_LIMIT=60000      # a mesh becomes one kernel face per triangle before it is merged
 
 
+class NoProgress:
+    """Progress sink for imports. ``stage`` starts a step covering ``start``..``end`` of the whole job
+    (``estimate`` is a rough duration in seconds for kernel calls that cannot report progress
+    themselves); ``at`` reports an exact overall fraction."""
+    def stage(self,text,start,end,estimate=0.,count=None):pass
+    def at(self,fraction):pass
+
+
+# Payloads produced by the import worker were validated there; checking them again here would
+# block the user interface for seconds on large meshes (the kernel holds the GIL while it checks).
+_TRUSTED_PAYLOADS=set()
+def trust_payload(payload):_TRUSTED_PAYLOADS.add(payload)
+
+
 def _hex(color):
     r,g,b=(max(0,min(255,int(round(float(v)*255)))) for v in color.toTuple()[:3])
     return '#{:02x}{:02x}{:02x}'.format(r,g,b)
@@ -35,10 +49,11 @@ def _step_parts(path):
     return parts
 
 
-def _checked_solids(solids,label):
+def _checked_solids(solids,label,progress=None,span=(0.,1.)):
     if not solids:raise ModelError(label+' must contain closed solid bodies.')
     repaired=[]
-    for solid in solids:
+    for index,solid in enumerate(solids):
+        if progress:progress.at(span[0]+(span[1]-span[0])*index/len(solids))
         if not solid.isValid():
             # Many real-world files are slightly out of tolerance; try a kernel repair first.
             try:solid=solid.fix()
@@ -57,28 +72,50 @@ def _import_feature(solids,path,names=None,colors=None):
     return feature
 
 
-def import_step(path):
+def _file_megabytes(path):
+    try:return Path(path).stat().st_size/1e6
+    except OSError:return 1.
+
+
+def _finish(solids,path,progress,start,label,names=None,colors=None):
+    """Validate the solids and encode them as a feature, reporting ``start``..1 of the job."""
+    count=max(1,sum(len(s.Faces()) for s in solids))
+    progress.stage('Checking geometry…',start,start+(1-start)*.7,count*.0003)
+    solids=_checked_solids(solids,label,progress,(start,start+(1-start)*.7))
+    progress.stage('Packing geometry…',start+(1-start)*.7,1.,count*.0001)
+    feature=_import_feature(solids,path,names,colors);progress.at(1.)
+    return feature
+
+
+def import_step(path,progress=None):
     """A STEP file as an ``import_solid`` feature. Part names and colours are kept when it has them."""
+    progress=progress or NoProgress()
+    progress.stage('Reading STEP file…',0.,.6,1.+3.*_file_megabytes(path))
     parts=_step_parts(path)
     if not parts:
         # A STEP file can hold several root shapes; .val() would keep only the first.
+        progress.stage('Reading STEP shapes…',.3,.6,1.+3.*_file_megabytes(path))
         shapes=cq.importers.importStep(str(path)).vals()
         solids=[solid for shape in shapes if hasattr(shape,'Solids') for solid in shape.Solids()]
-        return _import_feature(_checked_solids(solids,'STEP'),path)
-    solids=_checked_solids([p[2] for p in parts],'STEP')
-    return _import_feature(solids,path,[p[0] for p in parts],[p[1] for p in parts])
+        return _finish(solids,path,progress,.6,'STEP')
+    return _finish([p[2] for p in parts],path,progress,.6,'STEP',[p[0] for p in parts],[p[1] for p in parts])
 
 
-def import_iges(path):
+def import_iges(path,progress=None):
     """IGES solids; closed shells made of surfaces are sewn into solids."""
     from OCP.IGESControl import IGESControl_Reader
+    progress=progress or NoProgress()
+    progress.stage('Reading IGES file…',0.,.4,1.+3.*_file_megabytes(path))
     reader=IGESControl_Reader()
     if not reader.ReadFile(str(path)):raise ModelError('The IGES file could not be read.')
     reader.TransferRoots()
     shape=cq.Shape.cast(reader.OneShape())
     solids=list(shape.Solids())
-    if not solids:solids=_solids_from_faces(list(shape.Faces()))
-    return _import_feature(_checked_solids(solids,'IGES'),path)
+    if not solids:
+        faces=list(shape.Faces())
+        progress.stage('Sewing {count} surfaces…',.4,.7,len(faces)*.002,len(faces))
+        solids=_solids_from_faces(faces)
+    return _finish(solids,path,progress,.7,'IGES')
 
 
 def _solids_from_faces(faces):
@@ -98,13 +135,14 @@ def _solids_from_faces(faces):
     return solids
 
 
-def _triangle_faces(vertices,triangles):
+def _triangle_faces(vertices,triangles,progress=None,span=(0.,1.)):
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace,BRepBuilderAPI_MakePolygon
     from OCP.gp import gp_Pnt
     if len(triangles)>MESH_TRIANGLE_LIMIT:
         raise ModelError(f'The mesh has {len(triangles):,} triangles; SlothCAD imports meshes of up to {MESH_TRIANGLE_LIMIT:,}. Simplify it first.')
-    faces=[]
-    for a,b,c in triangles:
+    faces=[];step=max(1,len(triangles)//200)
+    for index,(a,b,c) in enumerate(triangles):
+        if progress and index%step==0:progress.at(span[0]+(span[1]-span[0])*index/len(triangles))
         pa,pb,pc=(np.asarray(vertices[i],float) for i in (a,b,c))
         if float(np.linalg.norm(np.cross(pb-pa,pc-pa)))<1e-12:continue
         polygon=BRepBuilderAPI_MakePolygon(gp_Pnt(*pa),gp_Pnt(*pb),gp_Pnt(*pc),True)
@@ -163,21 +201,29 @@ def read_mesh(path):
     raise ModelError('Unsupported mesh format.')
 
 
-def import_mesh(path):
+def import_mesh(path,progress=None):
     """A closed triangle mesh as a solid: triangles are sewn together and coplanar ones merged."""
+    progress=progress or NoProgress()
+    progress.stage('Reading mesh file…',0.,.03,.2*_file_megabytes(path))
     vertices,triangles=read_mesh(path)
     if not len(triangles):raise ModelError('The mesh has no triangles.')
-    solids=_solids_from_faces(_triangle_faces(vertices,triangles))
+    count=len(triangles)
+    progress.stage('Building {count} triangles…',.03,.25,0.,count)
+    faces=_triangle_faces(vertices,triangles,progress,(.03,.25))
+    # Sewing is one long kernel call with no progress of its own; the estimate (≈0.75 ms per
+    # triangle, measured) only drives the bar, which slows down instead of overshooting.
+    progress.stage('Sewing {count} triangles into a solid…',.25,.75,count*.00075,count)
+    solids=_solids_from_faces(faces)
     if not solids:raise ModelError('The mesh is not watertight, so it cannot become a solid. Repair the holes in a mesh editor first.')
-    return _import_feature(_checked_solids(solids,'Mesh'),path)
+    return _finish(solids,path,progress,.75,'Mesh')
 
 
-def import_model(path):
+def import_model(path,progress=None):
     """STEP, IGES or a triangle mesh, chosen by the file extension."""
     suffix=Path(path).suffix.lower()
-    if suffix in ('.step','.stp'):return import_step(path)
-    if suffix in ('.iges','.igs'):return import_iges(path)
-    if suffix in ('.stl','.obj','.3mf'):return import_mesh(path)
+    if suffix in ('.step','.stp'):return import_step(path,progress)
+    if suffix in ('.iges','.igs'):return import_iges(path,progress)
+    if suffix in ('.stl','.obj','.3mf'):return import_mesh(path,progress)
     raise ModelError('Choose a STEP, IGES, STL, OBJ or 3MF file.')
 
 @lru_cache(maxsize=12)
@@ -185,7 +231,7 @@ def _decode(payload):
     try:
         data=zlib.decompress(base64.b64decode(payload,validate=True));shape=cq.Shape.importBrep(io.BytesIO(data))
     except Exception as error:raise ModelError('Invalid embedded STEP geometry.') from error
-    if not shape.isValid() or not shape.Solids():raise ModelError('Imported geometry has no valid solids.')
+    if not shape.Solids() or (payload not in _TRUSTED_PAYLOADS and not shape.isValid()):raise ModelError('Imported geometry has no valid solids.')
     return shape
 
 def imported_shape(f):
@@ -288,6 +334,40 @@ def export_dxf(path,entities):
         else:
             points=sample(e);layout.add_lwpolyline(points[:-1] if np.linalg.norm(points[0]-points[-1])<1e-6 else points,close=np.linalg.norm(points[0]-points[-1])<1e-6,dxfattribs=attrs)
     doc.saveas(str(path))
+
+
+def export_kind(path,tolerance,angular_tolerance):
+    """'STEP', 'STL', '3MF' or 'GLTF' for ``path``; checks the filename and mesh tolerances."""
+    suffix=Path(path).suffix.lower()
+    kind={'.step':'STEP','.stp':'STEP','.stl':'STL','.3mf':'3MF','.glb':'GLTF'}.get(suffix)
+    if kind is None:raise ModelError('Choose a .step, .stp, .stl, .3mf or .glb filename.')
+    if not (math.isfinite(tolerance) and tolerance>0 and math.isfinite(angular_tolerance) and angular_tolerance>0):
+        raise ModelError('Mesh tolerances must be positive numbers.')
+    return kind
+
+
+def export_items_file(items,path,tolerance=0.05,angular_tolerance=0.1,colors=True):
+    """Write ``[(name, shape, (r, g, b))]`` to STEP (with names and colours), STL, 3MF or glTF.
+
+    Shared by ``Document.export`` and the background kernel process."""
+    kind=export_kind(path,tolerance,angular_tolerance)
+    if not items:raise ModelError('There is nothing visible to export.')
+    if kind=='3MF':
+        export_3mf(path,items,tolerance,angular_tolerance);return
+    if kind=='GLTF' or (kind=='STEP' and colors):
+        try:
+            assembly=cq.Assembly(name='SlothCAD')
+            for index,(name,shape,rgb) in enumerate(items):
+                assembly.add(shape,name=f'{name} ({index+1})',color=cq.Color(*rgb,1.))
+            if kind=='GLTF':
+                assembly.export(str(path),exportType='GLTF',tolerance=tolerance,angularTolerance=angular_tolerance);return
+            assembly.export(str(path),exportType='STEP');return
+        except Exception:
+            if kind=='GLTF':raise
+            # fall back to the plain STEP exporter below
+    shape=items[0][1] if len(items)==1 else cq.Compound.makeCompound([item[1] for item in items])
+    cq.exporters.export(cq.Workplane('XY').newObject([shape]),str(path),exportType=kind,
+                        tolerance=tolerance,angularTolerance=angular_tolerance)
 
 
 def export_3mf(path,items,tolerance=0.05,angular_tolerance=0.1):

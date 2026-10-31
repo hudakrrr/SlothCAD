@@ -12,6 +12,19 @@ from model import build_state,ModelError
 from i18n import tr
 from ui_icons import icon
 
+
+_SUMMARIES={}
+def _body_summary(body):
+    """``(volume, centre of mass)`` of a body, cached: both are a full volume integration, which
+    takes a noticeable time on the interface thread for big (e.g. imported mesh) bodies."""
+    key=body.hashCode()
+    for other,value in _SUMMARIES.get(key,()):
+        if other.isSame(body):return value
+    value=(body.Volume(),body.Center().toTuple())
+    if len(_SUMMARIES)>256:_SUMMARIES.clear()
+    _SUMMARIES.setdefault(key,[]).append((body,value))
+    return value
+
 class RecoveryDialog(QDialog):
     def __init__(self,window):
         super().__init__(window);self.window=window;self.setWindowTitle(tr('Inspect / Repair references'));self.resize(820,620)
@@ -192,7 +205,7 @@ class BodyUI:
                 try:selected.add(resolve_body(result,ref)[0])
                 except ModelError:pass
             for i,b in enumerate(bodies):
-                c=b.Center().toTuple();listing.addItem(f'{tr("Body")} {i+1} · {b.Volume():g} mm³ · ({c[0]:g}, {c[1]:g}, {c[2]:g})');listing.item(i).setSelected(i in selected)
+                volume,c=_body_summary(b);listing.addItem(f'{tr("Body")} {i+1} · {volume:g} mm³ · ({c[0]:g}, {c[1]:g}, {c[2]:g})');listing.item(i).setSelected(i in selected)
             def changed(listing=listing,key=key):
                 refs=[body_reference(bodies[listing.row(item)],listing.row(item),len(bodies),result) for item in listing.selectedItems()]
                 self.parameter_changed(lambda value:f.update({key:value}),refs);self.highlight_body_targets(result)

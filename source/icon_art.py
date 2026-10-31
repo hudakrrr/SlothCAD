@@ -318,6 +318,7 @@ ART['export_step']=_doc(_solid_doc)+_out
 ART['import_dxf']=_doc(_drawing_doc)+_in
 ART['export_dxf']=_doc(_drawing_doc)+_out
 ART['export_stl']=_doc(poly([(13,25),(19,14),(25,25)],color='ink',fill='body',opacity=.3,width=1.2)+line(19,14,19,25,width=.9)+line(13,25,19,20,width=.9)+line(25,25,19,20,width=.9))+_out
+ART['import_stl']=_doc(poly([(13,25),(19,14),(25,25)],color='ink',fill='body',opacity=.3,width=1.2)+line(19,14,19,25,width=.9)+line(13,25,19,20,width=.9)+line(25,25,19,20,width=.9))+_in
 ART['apply']=ART['finish']
 
 # Toolbar group buttons get their own family icons.

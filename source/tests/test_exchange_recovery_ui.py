@@ -21,7 +21,7 @@ class ExchangeRecoveryUITests(unittest.TestCase):
   self.w.support_picked({'type':'plane','plane':'XY'});self.w.add_entity(entity('rectangle',center=[0,0],width=10,height=8))
  def test_file_actions_and_dxf_batch_sketch_undo_redo(self):
   from exchange import export_dxf
-  expected={'Import STEP…','Import DXF…','Export DXF…','Recover autosave…'};self.assertTrue(expected.issubset({a.property('_i18n_text') or a.text() for a in self.w.file_menu.actions()}))
+  expected={'Import…','Export…','Recover autosave…'};self.assertTrue(expected.issubset({a.property('_i18n_text') or a.text() for a in self.w.file_menu.actions()}))
   self.sketch();p=self.root/'batch.dxf';export_dxf(p,[entity('circle',center=[0,0],radius=2),entity('line',a=[-10,0],b=[10,0])])
   with patch('exchange_ui.QFileDialog.getOpenFileName',return_value=(str(p),'')):self.w.import_dxf_file()
   self.assertEqual(len(self.w.draft['entities']),3);self.w.undo();self.assertEqual(len(self.w.draft['entities']),1);self.w.redo();self.assertEqual(len(self.w.draft['entities']),3)

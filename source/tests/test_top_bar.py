@@ -20,7 +20,7 @@ class TopBarTests(unittest.TestCase):
         # The QMenu must remain alive independently of temporary QAction wrappers.
         self.app.processEvents()
         file_names=[a.text() for a in file_menu.actions() if not a.isSeparator()]
-        for expected in ('New','Open','Save','Save as','Export STEP…','Export STL…','Example part'):
+        for expected in ('New','Open','Save','Save as','Import…','Export…','Example part'):
             self.assertIn(expected,file_names)
         edit_menu=next(a.menu() for a in self.w.menuBar().actions() if a.text()=='Edit')
         self.assertEqual([a.text() for a in edit_menu.actions() if not a.isSeparator()],['Undo','Redo','Copy feature (with what it needs)','Paste feature into this project','Parameters…'])
@@ -40,10 +40,13 @@ class TopBarTests(unittest.TestCase):
         self.assertLess(x('fillet'),x('construct'))
         self.assertGreater(self.w.measure_button.mapTo(self.w, self.w.measure_button.rect().topRight()).x(),self.w.body_buttons['construct'].mapTo(self.w,self.w.body_buttons['construct'].rect().topRight()).x())
     def test_step_and_stl_exports_use_separate_filters_and_extensions(self):
-        with patch('app.QFileDialog.getSaveFileName',side_effect=[('part','STEP solid (*.step *.stp)'),('part','STL mesh (*.stl)')]) as dialog, patch.object(self.w.doc,'export') as export:
+        import kernel_process
+        with patch('app.QFileDialog.getSaveFileName',side_effect=[('part','STEP solid (*.step *.stp)'),('part','STL mesh (*.stl)')]) as dialog, patch.object(kernel_process.KERNEL,'call') as export, patch.object(self.w.doc,'export_items',return_value=[]):
             self.w.export_step();self.w.export_stl()
         self.assertEqual(dialog.call_count,2)
-        self.assertEqual([call.args[0] for call in export.call_args_list],['part.step','part.stl'])
+        # The file is written by the background kernel process, never on the interface thread.
+        self.assertEqual([call.args[0] for call in export.call_args_list],['export','export'])
+        self.assertEqual([call.args[1]['path'] for call in export.call_args_list],['part.step','part.stl'])
         self.assertIn('STEP solid',dialog.call_args_list[0].args[-1]);self.assertIn('STL mesh',dialog.call_args_list[1].args[-1])
     def test_warning_is_hidden_until_issue_then_opens_details(self):
         self.assertFalse(self.w.graphics_warning.isVisible())

@@ -44,7 +44,112 @@ class AnalysisUITests(unittest.TestCase):
         names=[a.text() for a in next(a.menu() for a in self.w.menuBar().actions() if a.text()=='Tools').actions() if not a.isSeparator()]
         self.assertEqual(names[:3],['Mass properties…','Check interference','Bill of materials…'])
         file_names=[a.text() for a in next(a.menu() for a in self.w.menuBar().actions() if a.text()=='File').actions()]
-        for expected in ('Import IGES / mesh…','Export drawing…','Export 3MF…','Export glTF (.glb)…'):self.assertIn(expected,file_names)
+        for expected in ('Import…','Export…'):self.assertIn(expected,file_names)
+        for gone in ('Import STEP…','Import DXF…','Import IGES / mesh…','Export STEP…','Export STL…','Export DXF…','Export drawing…','Export 3MF…','Export glTF (.glb)…'):self.assertNotIn(gone,file_names)
+
+    def test_import_and_export_ask_for_the_file_type_first(self):
+        from exchange_ui import IMPORT_FORMATS,EXPORT_FORMATS
+        self.assertIn('stl',[f[0] for f in IMPORT_FORMATS])
+        with patch.object(type(self.w),'choose_file_format',return_value='stl'),patch.object(type(self.w),'import_model_file') as importer:
+            self.w.import_file()
+        self.assertIn('*.stl',importer.call_args.args[0])
+        with patch.object(type(self.w),'choose_file_format',return_value='dxf'),patch.object(type(self.w),'import_dxf_file') as importer:
+            self.w.import_file()
+        importer.assert_called_once()
+        with patch.object(type(self.w),'choose_file_format',return_value='3mf'),patch.object(type(self.w),'export_format') as exporter:
+            self.w.export_file()
+        exporter.assert_called_once_with('3mf')
+        with patch.object(type(self.w),'choose_file_format',return_value=None),patch.object(type(self.w),'export_format') as exporter:
+            self.w.export_file()
+        exporter.assert_not_called()
+
+    def test_import_runs_in_a_worker_process_and_keeps_the_ui_responsive(self):
+        import cadquery as cq,time
+        from PySide6.QtCore import QTimer
+        import exchange_ui
+        stages=[];gaps=[];last=[time.monotonic()];in_worker=[True]
+        original=exchange_ui.ImportProgressDialog.set_stage
+        def record(dialog,text,*args,**kwargs):
+            stages.append(text)
+            if text=='Adding it to the model…':in_worker[0]=False
+            return original(dialog,text,*args,**kwargs)
+        def tick():
+            now=time.monotonic()
+            if in_worker[0]:gaps.append(now-last[0])
+            last[0]=now
+        with tempfile.TemporaryDirectory() as folder:
+            target=str(Path(folder)/'ball.stl');cq.exporters.export(cq.Workplane().sphere(10).val(),target,tolerance=.1)
+            self.w.doc=Document([]);self.w.refresh(True)
+            timer=QTimer();timer.timeout.connect(tick);timer.start(20)
+            with patch.object(exchange_ui.ImportProgressDialog,'set_stage',record):
+                self.assertTrue(self.w.import_feature_file(target))
+            timer.stop()
+        self.assertEqual(len(self.w.doc.solids()),1)
+        self.assertIn('Sewing {count} triangles into a solid…',stages)
+        self.assertLess(max(gaps),.5)     # the kernel work ran in another process
+
+    def test_exports_and_analysis_run_in_the_kernel_process(self):
+        import kernel_process
+        calls=[];original=kernel_process.KERNEL.call
+        def spy(op,args=None,report=None):calls.append(op);return original(op,args,report)
+        with tempfile.TemporaryDirectory() as folder,patch.object(kernel_process.KERNEL,'call',side_effect=spy):
+            target=Path(folder)/'part.step'
+            with patch.object(QFileDialog,'getSaveFileName',return_value=(str(target),'')):self.w.export_format('step')
+            self.assertTrue(target.exists() and target.stat().st_size>0)
+            unit=self.w._unit_mass_properties(False)
+            self.assertAlmostEqual(unit['volume'],self.w.doc.mass_properties(1.)['volume'],places=4)
+            self.assertEqual(len(self.run_dialog(self.w.check_interference) or []),1)
+        self.assertEqual(calls,['export','mass','interference'])
+
+    def test_kernel_process_recovers_after_it_dies(self):
+        import kernel_process
+        kernel_process.KERNEL.call('ping');kernel_process.KERNEL.process.kill();kernel_process.KERNEL.process.wait()
+        self.assertTrue(kernel_process.KERNEL.call('ping'))
+
+    def test_run_busy_keeps_the_viewport_frozen_and_restores_filters(self):
+        import threading
+        from PySide6.QtCore import QTimer
+        seen=[]
+        def probe():seen.append((self.w.centralWidget().updatesEnabled(),self.w.busy_progress.isVisible()))
+        timer=QTimer();timer.timeout.connect(probe);timer.start(20)
+        self.w.run_busy('Long',lambda report:(report(1,4,'Step'),threading.Event().wait(.5)))
+        timer.stop()
+        self.assertIn((False,True),seen)
+        self.assertTrue(self.w.centralWidget().updatesEnabled());self.assertTrue(self.w.centralWidget().isEnabled())
+        self.assertEqual(self.w.busy_progress.maximum(),4)
+
+    def test_import_can_be_cancelled(self):
+        import cadquery as cq
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QApplication
+        import exchange_ui
+        def cancel():
+            for widget in QApplication.topLevelWidgets():
+                if isinstance(widget,exchange_ui.ImportProgressDialog) and widget.isVisible():widget.cancel_button.click();return
+            QTimer.singleShot(50,cancel)
+        with tempfile.TemporaryDirectory() as folder:
+            target=str(Path(folder)/'ball.stl');cq.exporters.export(cq.Workplane().sphere(10).val(),target,tolerance=.02)
+            self.w.doc=Document([]);self.w.refresh(True)
+            QTimer.singleShot(300,cancel)
+            self.assertFalse(self.w.import_feature_file(target))
+        self.assertEqual(self.w.doc.features,[])
+
+    def test_import_errors_from_the_worker_are_reported(self):
+        from legacy_model import ModelError
+        with tempfile.TemporaryDirectory() as folder:
+            target=Path(folder)/'open.stl'
+            target.write_text('solid x\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid x\n')
+            with self.assertRaisesRegex(ModelError,'watertight'):self.w.import_feature_file(str(target))
+
+    def test_stl_file_imports_as_a_solid(self):
+        import cadquery as cq
+        with tempfile.TemporaryDirectory() as folder:
+            target=str(Path(folder)/'box.stl');cq.exporters.export(cq.Workplane().box(10,20,5).val(),target)
+            self.w.doc=Document([]);self.w.refresh(True)
+            with patch.object(type(self.w),'choose_file_format',return_value='stl'),patch.object(QFileDialog,'getOpenFileName',return_value=(target,'')):
+                self.w.import_file()
+            self.assertEqual(len(self.w.doc.solids()),1)
+            self.assertAlmostEqual(self.w.doc.solid.val().Volume(),1000,places=3)
 
     def test_mass_properties_dialog_reports_values(self):
         self.run_dialog(self.w.show_mass_properties)

@@ -1007,3 +1007,23 @@ HU.update({k:v for k,v in {'Lock rotation':'Forgatás zárolása','Rotation lock
 HU.update({k:v for k,v in {'Rotate only':'Csak forgatás','Turn 90°':'Elforgatás 90°-kal','Only rotating':'Csak forgatás','Pan, zoom and rotate':'Eltolás, nagyítás és forgatás'}.items() if k not in HU})
 
 HU.update({'Update available':'Frissítés elérhető','SlothCAD {new} is available (you have {old}). Click to install it and restart.':'Elérhető a SlothCAD {new} (jelenleg: {old}). Kattints a telepítéshez és az újraindításhoz.','Update SlothCAD':'SlothCAD frissítése','Install SlothCAD {new} now? The changed files are downloaded from GitHub and SlothCAD restarts. You are asked to save unsaved projects first.':'Telepíted most a SlothCAD {new} verziót? A módosult fájlok letöltődnek a GitHubról, majd a SlothCAD újraindul. Előtte rákérdez a nem mentett projektek mentésére.','Downloading update…':'Frissítés letöltése…','Comparing files…':'Fájlok összehasonlítása…','Installing new Python packages…':'Új Python-csomagok telepítése…','Installing update…':'Frissítés telepítése…','Update installed.':'Frissítés telepítve.','SlothCAD is already up to date.':'A SlothCAD már naprakész.','The update is installed. It takes effect the next time SlothCAD starts.':'A frissítés telepítve. A SlothCAD következő indításakor lép életbe.'})
+
+HU.update({k:v for k,v in {'Import…':'Importálás…','Export…':'Exportálás…','Import':'Importálás','Export':'Exportálás','Choose a file type:':'Válassz fájltípust:','Continue':'Tovább',
+    'IGES solid (*.iges *.igs)':'IGES test (*.iges *.igs)','OBJ mesh (*.obj)':'OBJ háló (*.obj)','DXF sketch (*.dxf)':'DXF vázlat (*.dxf)','Drawing (*.dxf *.svg)':'Rajz (*.dxf *.svg)',
+    'Exact solid bodies with names and colours':'Pontos testek nevekkel és színekkel','Closed triangle mesh, converted to a solid':'Zárt háromszögháló, testté alakítva',
+    'Older exact CAD format':'Régebbi pontos CAD-formátum','3D-printing package, converted to a solid':'3D-nyomtatási csomag, testté alakítva','2D geometry, imported as a sketch':'2D geometria, vázlatként importálva',
+    'Exact solids for other CAD programs':'Pontos testek más CAD-programokhoz','Triangle mesh for 3D printing':'Háromszögháló 3D-nyomtatáshoz','3D-printing package with colours':'3D-nyomtatási csomag színekkel',
+    'Mesh for viewers, web and rendering':'Háló megjelenítőkhöz, webhez és rendereléshez','The selected or current sketch as 2D geometry':'A kijelölt vagy aktuális vázlat 2D geometriaként',
+    'Projected 2D views of the model':'A modell vetített 2D nézetei','Bring in a STEP, STL or DXF file':'STEP, STL vagy DXF fájl behozása'}.items() if k not in HU})
+
+HU.update({k:v for k,v in {'Importing':'Importálás','Starting…':'Indítás…','Elapsed:':'Eltelt idő:','Import cancelled.':'Importálás megszakítva.','Imported':'Importálva',
+    'Adding it to the model…':'Hozzáadás a modellhez…','Starting the CAD kernel…':'A CAD-mag indítása…','Reading mesh file…':'Hálófájl beolvasása…',
+    'Building {count} triangles…':'{count} háromszög felépítése…','Sewing {count} triangles into a solid…':'{count} háromszög összevarrása testté…',
+    'Checking geometry…':'Geometria ellenőrzése…','Packing geometry…':'Geometria tömörítése…','Reading STEP file…':'STEP-fájl beolvasása…',
+    'Reading STEP shapes…':'STEP-alakzatok beolvasása…','Reading IGES file…':'IGES-fájl beolvasása…','Sewing {count} surfaces…':'{count} felület összevarrása…',
+    'The import stopped unexpectedly.':'Az importálás váratlanul leállt.'}.items() if k not in HU})
+
+HU.update({k:v for k,v in {'Computing mass properties…':'Tömegtulajdonságok számítása…','Preparing export…':'Exportálás előkészítése…','Reading shapes…':'Alakzatok beolvasása…',
+    'Writing STEP file…':'STEP-fájl írása…','Writing STL file…':'STL-fájl írása…','Writing 3MF file…':'3MF-fájl írása…','Writing GLB file…':'GLB-fájl írása…',
+    'Projecting views…':'Nézetek vetítése…','Checking interference…':'Ütközés ellenőrzése…',
+    'The background CAD process stopped unexpectedly. Please try again.':'A háttérben futó CAD-folyamat váratlanul leállt. Próbáld újra.'}.items() if k not in HU})

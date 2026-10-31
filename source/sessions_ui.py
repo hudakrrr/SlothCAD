@@ -75,7 +75,7 @@ class WelcomePage(QWidget):
         for key,icon_name,label,description,handler in (
             ('new','new','New project','Start with an empty project',window.blank),
             ('open','open','Open project…','Open an existing .fcad file',window.open),
-            ('import','import_step','Import a file…','Bring in a STEP solid or a DXF drawing',self.import_menu),
+            ('import','import_step','Import a file…','Bring in a STEP, STL or DXF file',window.import_file),
             ('example','component','Example part','Open the example part and explore',window.example)):
             card=StartCard(icon_name,label,description,lambda h=handler:h());cards.addWidget(card);self.cards[key]=card
         cards.addStretch(1);top_layout.addLayout(cards);outer.addWidget(top)
@@ -94,12 +94,6 @@ class WelcomePage(QWidget):
 
     def section(self,text):
         label=QLabel(tr(text));label.setObjectName('welcomeSection');label.setProperty('_i18n_text',text);return label
-
-    def import_menu(self):
-        menu=QMenu(self)
-        menu.addAction(tr('STEP solid (*.step *.stp)')).triggered.connect(lambda:self.window.import_step_file())
-        menu.addAction(tr('DXF drawing (*.dxf)')).triggered.connect(lambda:self.window.import_dxf_file())
-        card=self.cards['import'];menu.exec(card.mapToGlobal(card.rect().bottomLeft()))
 
     def refresh_recent(self):
         import time

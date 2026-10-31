@@ -949,44 +949,22 @@ class Document:
         ``visible_only`` leaves out bodies and surfaces hidden in the browser. ``tolerance`` (mm) and
         ``angular_tolerance`` (radians) control the mesh of STL and 3MF files.
         """
-        suffix = Path(path).suffix.lower()
-        kind = {'.step':'STEP','.stp':'STEP','.stl':'STL','.3mf':'3MF','.glb':'GLTF'}.get(suffix)
-        if kind is None: raise ModelError('Choose a .step, .stp, .stl, .3mf or .glb filename.')
-        if not (math.isfinite(tolerance) and tolerance>0 and math.isfinite(angular_tolerance) and angular_tolerance>0):
-            raise ModelError('Mesh tolerances must be positive numbers.')
-        items=self.export_items(visible_only)
-        if kind=='3MF':
-            from exchange import export_3mf
-            export_3mf(path,items,tolerance,angular_tolerance);return
-        if kind=='GLTF':
-            assembly=cq.Assembly(name='SlothCAD')
-            for index,(name,shape,rgb) in enumerate(items):
-                assembly.add(shape,name=f'{name} ({index+1})',color=cq.Color(*rgb,1.))
-            assembly.export(str(path),exportType='GLTF',tolerance=tolerance,angularTolerance=angular_tolerance);return
-        if kind=='STEP' and colors:
-            try:
-                assembly=cq.Assembly(name='SlothCAD')
-                for index,(name,shape,rgb) in enumerate(items):
-                    assembly.add(shape,name=f'{name} ({index+1})',color=cq.Color(*rgb,1.))
-                assembly.export(str(path),exportType='STEP');return
-            except Exception:
-                pass                  # fall back to the plain exporter below
-        if visible_only or len(items)>1 or kind=='STEP':
-            shape=items[0][1] if len(items)==1 else cq.Compound.makeCompound([item[1] for item in items])
-            export_shape=cq.Workplane('XY').newObject([shape])
-        else:
-            export_shape=__import__('surface_tools').scene(self.solid,self.frames)
-        cq.exporters.export(export_shape, str(path), exportType=kind,
-                            tolerance=tolerance, angularTolerance=angular_tolerance)
+        from exchange import export_items_file, export_kind
+        export_kind(path, tolerance, angular_tolerance)
+        export_items_file(self.export_items(visible_only), path, tolerance, angular_tolerance, colors)
 
     def mass_properties(self, density=1.0, visible_only=False):
         """Volume, area, mass, centre of mass and inertia of the solids (density in g/cm³)."""
         from analysis import mass_properties
-        visibility=self.display.get('bodies',{}) if isinstance(self.display,dict) else {}
-        chosen=[(name,body) for i,(name,body) in enumerate(zip(self.body_names(),self.solids())) if not visible_only or visibility.get(str(i),True)]
+        chosen=self.chosen_bodies(visible_only)
         result=mass_properties([body for _,body in chosen],density)
         result['names']=[name for name,_ in chosen]
         return result
+
+    def chosen_bodies(self, visible_only=False):
+        """``[(name, solid)]`` of every body, or only those shown in the browser."""
+        visibility=self.display.get('bodies',{}) if isinstance(self.display,dict) else {}
+        return [(name,body) for i,(name,body) in enumerate(zip(self.body_names(),self.solids())) if not visible_only or visibility.get(str(i),True)]
 
     def interferences(self):
         """Overlapping pairs of bodies as ``[(name_a, name_b, volume)]``."""

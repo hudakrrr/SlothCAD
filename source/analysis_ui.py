@@ -25,6 +25,16 @@ def _store(key,value):
     except Exception:pass
 
 
+def _scaled_mass_properties(unit,density):
+    """Mass properties computed for density 1 g/cm³, rescaled to ``density``."""
+    import math
+    if density<=0 or not math.isfinite(density):raise ModelError('Density must be a positive number.')
+    scale=lambda rows:[[v*density for v in row] for row in rows]
+    result=dict(unit,mass=unit['mass']*density,inertia=scale(unit['inertia']),principal=[v*density for v in unit['principal']],density=float(density))
+    result['bodies']=[dict(b,mass=b['mass']*density,inertia=scale(b['inertia']),principal=[v*density for v in b['principal']]) for b in unit['bodies']]
+    return result
+
+
 class AnalysisUI:
     # ---- export preferences ---------------------------------------------------------------
     def export_preferences(self):
@@ -63,6 +73,15 @@ class AnalysisUI:
             _store('export/visible_only','true' if only.isChecked() else 'false')
 
     # ---- mass properties ------------------------------------------------------------------
+    def _unit_mass_properties(self,visible_only,report=None):
+        """Mass properties at density 1 g/cm³, computed in the kernel process."""
+        from kernel_process import KERNEL,shape_bytes
+        chosen=self.doc.chosen_bodies(visible_only)
+        if not chosen:raise ModelError('There is no solid to measure.')
+        result=KERNEL.call('mass',dict(shapes=[shape_bytes(body) for _,body in chosen],density=1.),report)
+        result['names']=[name for name,_ in chosen]
+        return result
+
     def show_mass_properties(self):
         if self.doc.solid is None:
             self.show_status(tr('Create a body first.'));return
@@ -76,12 +95,18 @@ class AnalysisUI:
         visible=QCheckBox(tr('Only the bodies shown in the browser'));layout.addWidget(visible)
         report=QLabel();report.setTextInteractionFlags(Qt.TextSelectableByMouse);report.setWordWrap(True);report.setAlignment(Qt.AlignTop|Qt.AlignLeft)
         layout.addWidget(report,1)
+        # The kernel work (volume, area, inertia) runs once per body selection, in the background;
+        # mass and inertia scale linearly with density, so changing the material is instant.
+        unit={}
         def update(*_):
             chosen=material.currentData()
             if chosen is not None:
                 density.blockSignals(True);density.setValue(chosen);density.blockSignals(False)
             density.setEnabled(chosen is None)
-            try:result=self.doc.mass_properties(density.value(),visible.isChecked())
+            only=visible.isChecked()
+            try:
+                if only not in unit:unit[only]=self.run_busy('Computing mass properties…',lambda progress:self._unit_mass_properties(only,progress))
+                result=_scaled_mass_properties(unit[only],density.value())
             except ModelError as error:
                 report.setText(tr(str(error)));return
             c=result['center'];t=result['inertia'];p=result['principal']
@@ -104,7 +129,11 @@ class AnalysisUI:
     def check_interference(self):
         if self.doc.solid is None or len(self.doc.solids())<2:
             self.show_status(tr('Interference needs at least two bodies.'));return None
-        try:pairs=self.run_busy('Checking interference…',lambda report:self.doc.interferences())
+        def work(report):
+            from kernel_process import KERNEL,shape_bytes
+            shapes=[(name,shape_bytes(body)) for name,body in zip(self.doc.body_names(),self.doc.solids())]
+            return [tuple(pair) for pair in KERNEL.call('interference',dict(shapes=shapes),report)]
+        try:pairs=self.run_busy('Checking interference…',work)
         except Exception as error:
             self.error(error);return None
         if not pairs:
@@ -187,36 +216,30 @@ class AnalysisUI:
         if options is None:return
         filename,_=QFileDialog.getSaveFileName(self,tr('Export drawing'),'drawing.dxf',tr('DXF drawing (*.dxf);;SVG graphic (*.svg)'))
         if not filename:return
-        from drawing import export_dxf,export_svg
         svg=filename.lower().endswith('.svg')
         if not svg and not filename.lower().endswith('.dxf'):filename+='.dxf'
         tolerance,angular,visible_only=self.export_preferences()
         title=self.path.stem if self.path else ''
         try:
+            from kernel_process import KERNEL,item_bytes
             def work(report):
-                shape=self.doc.export_items(visible_only)
-                import cadquery as cq
-                solid=shape[0][1] if len(shape)==1 else cq.Compound.makeCompound([item[1] for item in shape])
-                if svg:return export_svg(filename,solid,options['views'],options['hidden'],options['scale'],title)
-                return export_dxf(filename,solid,options['views'],options['hidden'],options['scale'],options['dimensions'],title)
+                # Hidden-line projection is many long kernel calls; it runs in the kernel process.
+                report(0,0,'Preparing export…')
+                items=item_bytes(self.doc.export_items(visible_only))
+                return KERNEL.call('drawing',dict(items=items,path=str(filename),svg=svg,options=options,title=title),report)
             self.run_busy('Exporting drawing…',work)
             self.show_status(f'Exported {filename}')
         except Exception as error:self.error(error)
 
     # ---- importing ------------------------------------------------------------------------
-    def import_model_file(self):
-        """STEP, IGES or a triangle mesh (STL, OBJ, 3MF)."""
+    def import_model_file(self,filter_=None):
+        """STEP, IGES or a triangle mesh (STL, OBJ, 3MF); ``filter_`` limits the file dialog to one type."""
         self.ensure_session()
         if not self.abandon():return
-        filename,_=QFileDialog.getOpenFileName(self,tr('Import model'),'',tr('3D models (*.step *.stp *.iges *.igs *.stl *.obj *.3mf)'))
+        filter_=filter_ or tr('3D models (*.step *.stp *.iges *.igs *.stl *.obj *.3mf)')
+        filename,_=QFileDialog.getOpenFileName(self,tr('Import model'),'',filter_)
         if not filename:return
-        from exchange import import_model
-        try:
-            before=len(self.doc.solids())
-            feature=self.run_busy('Importing model…',lambda progress:import_model(filename))
-            self.run_busy('Rebuilding model…',lambda progress:self.doc.commit(self.doc.features+[feature],progress))
-            self.apply_import_colors(feature,before)
-            self.selected=len(self.doc.features)-1;self.workspace.set_mode('model');self.refresh(True)
+        try:self.import_feature_file(filename)
         except Exception as error:self.error(error)
 
     def apply_import_colors(self,feature,first_body):
