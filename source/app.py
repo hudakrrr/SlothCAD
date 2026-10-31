@@ -1,8 +1,8 @@
-"""SlothCAD 0.15.7: main window, toolbars and feature editors."""
+"""SlothCAD 0.15.8: main window, toolbars and feature editors."""
 import copy
 import os
 import sys
-VERSION='0.15.7'
+VERSION='0.15.8'
 # The maximum fillet/chamfer size is searched by worker processes without blocking the window.
 LIMIT_ASYNC=os.environ.get('QT_QPA_PLATFORM','') not in ('offscreen','minimal') and os.environ.get('SLOTHCAD_SYNC_LIMITS','')!='1'
 DEFAULT_EXTRUDE_DEPTH=0.      # a new extrusion starts flat; the depth is set with the arrow or by typing
@@ -791,7 +791,7 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         key='default' if body_id is None else str(body_id)
         defaults=self.doc.display.get('default_material',{'color':'#4baed6','finish':'matte'})
         current=copy.deepcopy(defaults if body_id is None else self.doc.display.get('materials',{}).get(key,defaults))
-        title=tr('Default body appearance') if body_id is None else tr(f'Body {int(body_id)+1} appearance')
+        title=tr('Default body appearance') if body_id is None else self.body_label(self.doc.solid,int(body_id))+' · '+tr('appearance')
         dialog=QDialog(self);dialog.setWindowTitle(title)
         layout=QFormLayout(dialog);finish=QComboBox()
         for value in ['matte','metallic','wood']:finish.addItem(tr(value),value)
@@ -1066,6 +1066,25 @@ class Window(SpaceMouseUI,SlotUI,SketchModifyUI,AnalysisUI,SectionUI,ParametersU
         self.object_tree_signature=None
         self.workspace.construction_items=[(f['id'],f['name'],self.doc.frames[f['id']]) for f in self.doc.features if f['kind'] in CONSTRUCTIONS and f['id'] in self.doc.frames and self.doc.display.get('construction',{}).get(f['id'],True)]
         self.set_scene_responsive(self.visible_solid(),self.scene_sketches(),materials=self.body_materials());self.update_title()
+    def body_label(self,result,index):
+        """The browser name of body ``index`` of ``result`` (a tool's model state, which may be an
+        earlier point in the history than the finished model the browser shows)."""
+        fallback=f'{tr("Body")} {index+1}';final=self.doc.solid
+        if final is None or result is None:return fallback
+        try:
+            bodies=result.val().Solids();finals=final.val().Solids()
+            if not 0<=index<len(bodies):return fallback
+            target=bodies[index]
+            match=next((k for k,b in enumerate(finals) if b.isSame(target)),None)
+            if match is None:
+                # Changed later in the history: follow the body's identity to the finished model.
+                from topology import identity
+                body_id=identity(result,target)
+                if body_id:match=next((k for k,b in enumerate(finals) if identity(final,b)==body_id),None)
+            if match is None:return fallback
+            name=self.doc.body_names()[match]
+            return f'{tr("Body")} {match+1}' if name==f'Body {match+1}' else name
+        except Exception:return fallback
     RENAMABLE=('bodies','sketches','construction','surfaces')
     def objects_menu(self,position):
         item=self.objects.itemAt(position);data=item.data(0,Qt.UserRole) if item else None

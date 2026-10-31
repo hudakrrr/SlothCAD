@@ -176,9 +176,11 @@ class AnalysisUITests(unittest.TestCase):
         self.assertTrue(csv_text.startswith('Part,Quantity,Volume (mm3)'))
 
     def test_export_preferences_and_formats(self):
-        with patch('analysis_ui._setting',side_effect=lambda key,default:{'export/quality':'fine','export/visible_only':'true'}.get(key,default)):
+        with patch('analysis_ui._setting',side_effect=lambda key,default:{'export/quality':'fine'}.get(key,default)):
             tolerance,angular,visible=self.w.export_preferences()
-        self.assertEqual((tolerance,angular,visible),(0.01,0.05,True))
+        self.assertEqual((tolerance,angular,visible),(0.01,0.05,True))     # hidden bodies are left out by default
+        with patch('analysis_ui._setting',side_effect=lambda key,default:{'export/include_hidden':'true'}.get(key,default)):
+            self.assertFalse(self.w.export_preferences()[2])
         with tempfile.TemporaryDirectory() as folder:
             for kind,suffix in (('3mf','.3mf'),('glb','.glb'),('stl','.stl'),('step','.step')):
                 target=str(Path(folder)/('out'+suffix))

@@ -71,4 +71,38 @@ class Rename(Base):
         self.assertIn('Pin',w.doc.body_names());self.assertEqual(self.errors,[])
 
 
+    def test_tools_show_the_browser_names(self):
+        self.body([entity('rectangle',center=[0,0],width=40,height=30)],10);self.body([entity('circle',center=[50,0],radius=5)],10,'new')
+        w=self.w;w.rebuild_objects()
+        self.items('bodies')[0].setText(0,'Plate');self.items('bodies')[1].setText(0,'Pin');self.items('sketches')[1].setText(0,'Pin sketch')
+        from references import body_reference
+        w.start_body_tool('body_combine');bodies=w.doc.solids()
+        w.set_slot_value(w.current_slots[0],body_reference(bodies[0],0,2,w.doc.solid));w.set_slot_value(w.current_slots[1],body_reference(bodies[1],1,2,w.doc.solid))
+        self.assertEqual([w.describe_slot(s) for s in w.current_slots],['Plate','Pin'])
+        listing=w.widgets['targets'];self.assertEqual([listing.item(i).text().split(' · ')[0] for i in range(listing.count())],['Plate','Pin'])
+        w.cancel();w.start_extrude();self.assertIn('Pin sketch · profile 1',[name for name,_ in w.profile_choices]);w.cancel()
+        self.body([entity('circle',center=[0,0],radius=3)],10,'cut')      # the plate changes after the 'new' extrusion
+        w.timeline_edit(3);result=w.tool_context()[0];self.assertEqual(w.body_label(result,0),'Plate');w.cancel()
+        self.assertEqual(self.errors,[])
+
+
+class Export(Base):
+    def test_hidden_bodies_are_left_out_of_exports(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QFileDialog
+        self.body([entity('rectangle',center=[0,0],width=40,height=30)],10);self.body([entity('circle',center=[50,0],radius=5)],10,'new')
+        w=self.w;w.doc.display.setdefault('bodies',{})['1']=False;w.refresh()
+        captured=[]
+        original=w.doc.export_items
+        with patch.object(w.doc,'export_items',side_effect=lambda visible_only=False:captured.append(original(visible_only)) or captured[-1]):
+            with tempfile.TemporaryDirectory() as folder:
+                target=str(Path(folder)/'out.step')
+                with patch('analysis_ui._setting',side_effect=lambda key,default:default),patch.object(QFileDialog,'getSaveFileName',return_value=(target,'')):
+                    w.export_format('step')
+                self.assertTrue(Path(target).exists())
+        self.assertEqual(len(captured[-1]),1);self.assertEqual(self.errors,[])
+
+
 if __name__=='__main__':unittest.main()

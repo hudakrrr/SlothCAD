@@ -375,7 +375,7 @@ class SolidUI:
             check=QCheckBox(tr('Ruled loft'));check.setChecked(f['ruled']);check.toggled.connect(lambda on:self.parameter_changed(lambda value:f.update(ruled=value),on));form.addRow(check)
         elif kind in ('shell','draft'):
             bodies=result.val().Solids() if result else []
-            self.reference_combo(form,'body','Body',[(f'Body {i+1}',i) for i in range(len(bodies))],f.get('body',0),lambda value:self.change_body(value),True)
+            self.reference_combo(form,'body','Body',[(self.body_label(result,i),i) for i in range(len(bodies))],f.get('body',0),lambda value:self.change_body(value),True)
             if kind=='shell':self.shell_thickness(form,f)
             else:planes('neutral','Neutral plane');self.spin(form,'angle','Draft angle',f['angle'],lambda value:f.update(angle=value))
             listing=QListWidget();listing.setSelectionMode(QAbstractItemView.MultiSelection);listing.setMaximumHeight(180)

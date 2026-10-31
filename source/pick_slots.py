@@ -174,6 +174,14 @@ class SlotUI:
         value = f.get(slot.key)
         if not self.slot_filled(slot):
             return ''
+        if slot.kind == 'bodies' and isinstance(value, list):
+            # Bodies are listed by the names they have in the browser.
+            from references import resolve_body
+            result = self.tool_context()[0];names = []
+            for ref in value:
+                try:names.append(self.body_label(result, resolve_body(result, ref)[0]))
+                except Exception:names.append(tr('Body'))
+            return ', '.join(names) if len(names) <= 3 else f'{len(names)} ' + tr('bodies') + ': ' + ', '.join(names[:3]) + '…'
         if slot.multi or isinstance(value, list):
             return f'{len(value)} ' + tr('chosen')
         if isinstance(value, dict):

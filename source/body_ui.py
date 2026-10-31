@@ -205,7 +205,7 @@ class BodyUI:
                 try:selected.add(resolve_body(result,ref)[0])
                 except ModelError:pass
             for i,b in enumerate(bodies):
-                volume,c=_body_summary(b);listing.addItem(f'{tr("Body")} {i+1} · {volume:g} mm³ · ({c[0]:g}, {c[1]:g}, {c[2]:g})');listing.item(i).setSelected(i in selected)
+                volume,c=_body_summary(b);listing.addItem(f'{self.body_label(result,i)} · {volume:g} mm³ · ({c[0]:g}, {c[1]:g}, {c[2]:g})');listing.item(i).setSelected(i in selected)
             def changed(listing=listing,key=key):
                 refs=[body_reference(bodies[listing.row(item)],listing.row(item),len(bodies),result) for item in listing.selectedItems()]
                 self.parameter_changed(lambda value:f.update({key:value}),refs);self.highlight_body_targets(result)

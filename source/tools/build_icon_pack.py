@@ -98,6 +98,8 @@ CUSTOM.update({
 })
 
 # Solid fillet and chamfer: a cube whose front vertical edge is rounded / cut off.
+# Section analysis: a block with the cutting plane through it; the cut-away half is dashed.
+CUSTOM['section']=[P('M4 9L10 6H20V16L14 19H4Z'),P('M4 9H14V19'),P('M14 9L20 6'),P('M9 3.5V21.5L13 19.5',dash='2 2'),P('M9 3.5L13 1.5V19.5',dash='2 2')]
 CUSTOM['sketch_chamfer']=list(CUSTOM['chamfer'])      # the flat corner drawing stays for sketches
 _cube_sides=[P('M12 3L20 7.5V16.5L16.4 18.5'),P('M12 3L4 7.5V16.5L7.6 18.5'),
              P('M4 7.5L7.6 9.5'),P('M20 7.5L16.4 9.5'),P('M7.6 9.5V18.5'),P('M16.4 9.5V18.5')]

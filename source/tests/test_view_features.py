@@ -106,9 +106,11 @@ class ViewTests(unittest.TestCase):
         self.assertEqual(int(self.ws.kept_triangles().sum()),total)
         panel.position.setValue(5.);self.app.processEvents()
         kept=self.ws.kept_triangles();self.assertLess(int(kept.sum()),total)
-        panel.flip.setChecked(True);self.app.processEvents()
+        panel.flip.click();self.app.processEvents()
+        self.assertTrue(np.allclose(self.ws.section['normal'],[0,0,-1]))     # Change side keeps the other half
         other=self.ws.kept_triangles()
         self.assertLess(int(other.sum()),total);self.assertFalse(np.any(kept&other&False))
+        panel.flip.click();self.assertTrue(np.allclose(self.ws.section['normal'],[0,0,1]))      # and back
         self.w.end_section();self.assertIsNone(self.ws.section_plane());self.assertFalse(self.w.section_panel.isVisible())
         self.assertFalse(self.w.section_button.isChecked())
 

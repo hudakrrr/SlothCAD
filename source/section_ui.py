@@ -2,7 +2,7 @@
 import copy
 import numpy as np
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QFrame,QHBoxLayout,QLabel,QComboBox,QDoubleSpinBox,QCheckBox,QToolButton,
+from PySide6.QtWidgets import (QFrame,QHBoxLayout,QLabel,QComboBox,QDoubleSpinBox,QCheckBox,QToolButton,QPushButton,
                                QInputDialog)
 from i18n import tr
 
@@ -106,12 +106,18 @@ class SectionPanel(QFrame):
         pick.clicked.connect(window.pick_section_face);layout.addWidget(pick);self.pick_button=pick
         self.position=QDoubleSpinBox();self.position.setDecimals(3);self.position.setRange(-100000,100000);self.position.setSingleStep(1.)
         self.position.setSuffix(' mm');self.position.setToolTip(tr('Distance of the cut along the plane normal · or drag the arrow in the view'));layout.addWidget(self.position)
-        self.flip=QCheckBox(tr('Keep the other side'));layout.addWidget(self.flip)
+        # One click shows the other half of the model; the next click switches back.
+        self.flipped=False
+        self.flip=QPushButton('⇅  '+tr('Change side'));self.flip.setToolTip(tr('Show the other half of the model'))
+        layout.addWidget(self.flip)
         close=QToolButton();close.setText('✕');close.setToolTip(tr('Close the section view'));close.clicked.connect(window.end_section);layout.addWidget(close)
         self.plane.currentIndexChanged.connect(self.changed_plane)
         self.position.valueChanged.connect(lambda *_:self.apply())
-        self.flip.toggled.connect(lambda *_:self.apply())
+        self.flip.clicked.connect(self.change_side)
         self.hide()
+
+    def change_side(self):
+        self.flipped=not self.flipped;self.apply()
 
     def base(self):
         """``(axis, origin)``: the plane moves along ``axis``, position 0 passes through ``origin``."""
@@ -132,9 +138,9 @@ class SectionPanel(QFrame):
 
     def apply(self):
         axis,origin=self.base();position=float(self.position.value())
-        point=origin+axis*position;normal=-axis if self.flip.isChecked() else axis
+        point=origin+axis*position;normal=-axis if self.flipped else axis
         section=dict(normal=normal.tolist(),distance=float(normal@point),plane=self.plane.currentData(),position=position,
-                     flip=self.flip.isChecked(),axis=axis.tolist())
+                     flip=self.flipped,axis=axis.tolist())
         shape=self.window.workspace.mesh_shape
         if shape is not None:
             # The arrow sits where the plane crosses the middle of the model; a square shows the plane.

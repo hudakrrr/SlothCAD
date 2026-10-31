@@ -45,7 +45,9 @@ class AnalysisUI:
             try:tolerance=float(_setting('export/tolerance',0.05));angular=float(_setting('export/angular',0.1))
             except (TypeError,ValueError):tolerance,angular=MESH_QUALITY['standard']
             if not (tolerance>0 and angular>0):tolerance,angular=MESH_QUALITY['standard']
-        visible=str(_setting('export/visible_only','false')).lower()=='true'
+        # Bodies unchecked in the browser are left out unless asked for (a separate key from the
+        # old opt-in 'export/visible_only', so an earlier saved 'off' does not keep including them).
+        visible=str(_setting('export/include_hidden','false')).lower()!='true'
         return tolerance,angular,visible
 
     def export_options(self):
@@ -65,12 +67,12 @@ class AnalysisUI:
             if not custom:
                 d,a=MESH_QUALITY[quality.currentData()];deviation.setValue(d);angle.setValue(a)
         quality.currentIndexChanged.connect(sync);sync()
-        only=QCheckBox(tr('Only the bodies shown in the browser'));only.setChecked(visible);layout.addWidget(only)
+        hidden=QCheckBox(tr('Also export bodies hidden in the browser'));hidden.setChecked(not visible);layout.addWidget(hidden)
         buttons=QDialogButtonBox(QDialogButtonBox.Ok|QDialogButtonBox.Cancel);layout.addWidget(buttons)
         buttons.accepted.connect(dialog.accept);buttons.rejected.connect(dialog.reject)
         if dialog.exec()==QDialog.Accepted:
             _store('export/quality',quality.currentData());_store('export/tolerance',deviation.value());_store('export/angular',angle.value())
-            _store('export/visible_only','true' if only.isChecked() else 'false')
+            _store('export/include_hidden','true' if hidden.isChecked() else 'false')
 
     # ---- mass properties ------------------------------------------------------------------
     def _unit_mass_properties(self,visible_only,report=None):
