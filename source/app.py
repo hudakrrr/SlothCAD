@@ -1,8 +1,8 @@
-"""SlothCAD 0.15.8: main window, toolbars and feature editors."""
+"""SlothCAD 0.15.9: main window, toolbars and feature editors."""
 import copy
 import os
 import sys
-VERSION='0.15.8'
+VERSION='0.15.9'
 # The maximum fillet/chamfer size is searched by worker processes without blocking the window.
 LIMIT_ASYNC=os.environ.get('QT_QPA_PLATFORM','') not in ('offscreen','minimal') and os.environ.get('SLOTHCAD_SYNC_LIMITS','')!='1'
 DEFAULT_EXTRUDE_DEPTH=0.      # a new extrusion starts flat; the depth is set with the arrow or by typing
@@ -2114,8 +2114,12 @@ Face supports use geometric matching; ambiguous references stop rebuilding.""")
             if note:self.show_status(note,15000)
         except Exception as e:self.error(e)
     def edge_fit_note(self,feature):
-        """Explain what auto-fit adjusted on the last build of a fillet/chamfer."""
-        from model import EDGE_REPORTS
+        """Explain what the last build of a feature adjusted: auto-fit on fillets/chamfers, loose join pieces."""
+        from model import EDGE_REPORTS,EXTRUDE_REPORTS
+        joined=EXTRUDE_REPORTS.get(feature.get('id')) if feature and feature.get('kind')=='extrude' and feature.get('operation')=='add' else None
+        if joined:
+            count=joined['separate']
+            return f"{count} "+tr('extruded piece only touches the body along an edge (or not at all) and was kept as a separate body.' if count==1 else 'extruded pieces only touch the body along an edge (or not at all) and were kept as separate bodies.')
         report=EDGE_REPORTS.get(feature.get('id')) if feature else None
         if not report or not (report.get('reduced') or report.get('skipped')):return ''
         parts=[]

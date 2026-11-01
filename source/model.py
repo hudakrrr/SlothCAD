@@ -90,22 +90,74 @@ def _edge_trial_is_valid(trial):
     except Exception:return False
 
 
-def _extrusion_boolean(base,tool,solids,operation):
-    """Run an extrusion boolean, falling back to per-profile operations if a compound fails."""
-    action={'add':'union','cut':'cut','intersect':'intersect'}[operation]
-    try:
-        combined=getattr(base,action)(tool)
-        if _edge_trial_is_valid(combined):return combined
-    except Exception:pass
-    if operation in ('add','cut') and len(solids)>1:
-        current=base
+FUZZY_TOLERANCES=(1e-6,1e-5,1e-4)
+
+
+def _robust_boolean(base,tool,action):
+    """``base.<action>(tool)``, retried until the kernel gives a valid solid, else None.
+
+    Extrusions drawn on the plane of an existing body share faces and edges with it exactly
+    (a plate under a ring, corner pieces that touch the ring along an arc). The kernel's exact
+    boolean sometimes fails on such coincident geometry, and the clean-up that merges faces
+    afterwards can spoil a good result. So the boolean is retried without the clean-up and then
+    with a small fuzzy tolerance (well below anything visible), which treats geometry that
+    coincides within it as shared.
+    """
+    attempts=[lambda:getattr(base,action)(tool),lambda:getattr(base,action)(tool,clean=False)]
+    attempts+=[lambda t=t:getattr(base,action)(tool,tol=t) for t in FUZZY_TOLERANCES]
+    for attempt in attempts:
         try:
-            for solid in solids:
-                current=getattr(current,action)(solid)
-                if not _edge_trial_is_valid(current):raise ModelError('A selected profile produced an invalid intermediate solid.')
-            return current
-        except Exception as error:
-            raise ModelError('The selected extrusions could not be joined into a valid solid. Try separating profiles that overlap or touch.') from error
+            result=attempt();value=result.val()
+            # A result with no material (an intersect that does not overlap, a cut that
+            # removes everything) is a real answer: retrying would only cost time.
+            if value is None or not value.Solids():return None
+            ok,volume=_shape_status(value)
+            if ok and volume>1e-9:return result
+        except Exception:pass
+    return None
+
+
+def _fused_tool(solids):
+    """The extrusions of all selected profiles as one tool, with touching profiles merged.
+
+    Profiles that share an edge in the sketch (the pieces of a ring split by a rectangle)
+    become one solid, so a first extrusion or a New body gives one body instead of one per
+    piece. Profiles that do not touch stay separate solids. If the kernel cannot merge them,
+    the pieces are used as they are, which is what the body boolean expects anyway.
+    """
+    if len(solids)==1:return cq.Workplane('XY').newObject([solids[0]])
+    loose=cq.Workplane('XY').newObject([cq.Compound.makeCompound(solids)])
+    fused=_robust_boolean(cq.Workplane('XY').newObject([solids[0]]),cq.Workplane('XY').newObject([cq.Compound.makeCompound(solids[1:])]),'union')
+    if fused is None:return loose
+    try:
+        if abs(fused.val().Volume()-sum(s.Volume() for s in solids))>1e-6*max(1.,fused.val().Volume()):return loose   # overlapping profiles: keep the old behaviour
+    except Exception:return loose
+    return fused
+
+
+def _extrusion_boolean(base,tool,solids,operation):
+    """Run an extrusion boolean, falling back to per-profile operations if a compound fails.
+
+    A join never stops because of one awkward piece: a profile that cannot be fused even with
+    the fallbacks is kept as a separate body, so the rest of the extrusion still happens.
+    """
+    action={'add':'union','cut':'cut','intersect':'intersect'}[operation]
+    combined=_robust_boolean(base,tool,action)
+    if combined is not None:return combined
+    if operation in ('add','cut') and len(solids)>1:
+        current=base;loose=[]
+        for solid in solids:
+            step=_robust_boolean(current,cq.Workplane('XY').newObject([solid]),action)
+            if step is not None:current=step
+            elif operation=='add':loose.append(solid)
+            else:raise ModelError('A selected profile could not be cut from the body. Check the profile overlap and direction.')
+        if operation=='add' and loose:current=_with_bodies(current,loose)
+        if _edge_trial_is_valid(current):return current
+        raise ModelError('The selected extrusions could not be joined into a valid solid. Try separating profiles that overlap or touch.')
+    if operation=='add':
+        # The pieces could not be fused at all: keep them as bodies of their own.
+        kept=_with_bodies(base,list(tool.val().Solids()))
+        if _edge_trial_is_valid(kept):return kept
     raise ModelError('The extrusion boolean did not produce a valid solid. Check the profile overlap and direction.')
 
 
@@ -328,6 +380,9 @@ def _edge_result_quality(base,trial,strict,fast=False):
 
 # Last auto-fit outcome per feature id, for the UI to explain what was adjusted.
 EDGE_REPORTS={}
+# Joins whose pieces could not merge with the body (they only touch it along an edge, or not
+# at all) and were kept as separate bodies, by feature id, so the interface can say so.
+EXTRUDE_REPORTS={}
 
 
 def _plain_references(edges):
@@ -634,7 +689,7 @@ def _build_state(features,progress=None,start_state=None,start_index=0,capture=N
                 # Through-all measures only the bodies the extrusion may change (not hidden ones).
                 visible=_participating(result,f.get('exclude_bodies'))[0] if f.get('extent')=='through all' and f.get('operation')!='new' else result
                 solids=[extrude(source,f,result,sketches,frames,bounds_of=visible) for source in extrusion_sources(f)]
-                tool=cq.Workplane('XY').newObject([solids[0] if len(solids)==1 else cq.Compound.makeCompound(solids)])
+                tool=_fused_tool(solids)
             elif kind in BODY_TOOLS:
                 shape=body_operation(f,result,sketches,frames);result=cq.Workplane('XY').newObject([shape]);tool=None
             elif kind in SOLID_TOOLS:
@@ -689,7 +744,11 @@ def _build_state(features,progress=None,start_state=None,start_index=0,capture=N
                             if had_bodies:raise ModelError('Every body this feature could change is hidden. Show the body, or choose New body.')
                             raise ModelError('A negative extrusion needs an existing body.' if f.get('signed_depth') and f['depth']<0 else 'The first solid feature must add material.')
                         result=tool
-                    elif operation=='add': result=_body_boolean(result,tool,solids,operation)
+                    elif operation=='add':
+                        before=_solid_count(result.val());EXTRUDE_REPORTS.pop(f.get('id'),None)
+                        result=_body_boolean(result,tool,solids,operation)
+                        loose=_solid_count(result.val())-before
+                        if loose>0:EXTRUDE_REPORTS[f.get('id')]={'separate':loose}
                     elif operation=='cut':
                         if f.get('signed_depth',False) and result.intersect(tool).val().Volume()<=1e-9:
                             raise ModelError('The cut does not intersect a body. Check its direction, start offset and depth.')
